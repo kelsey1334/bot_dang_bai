@@ -18,7 +18,7 @@ WORDPRESS_URL = os.getenv("WORDPRESS_URL")
 WORDPRESS_USER = os.getenv("WORDPRESS_USER")
 WORDPRESS_PASS = os.getenv("WORDPRESS_PASS")
 
-SEO_PROMPT = '''Viết một bài blog dài khoảng 1500 từ chuẩn SEO với từ khóa chính là: "{keyword}".
+SEO_PROMPT = '''Bạn là một chuyên gia viết nội dung SEO. Viết một bài blog dài khoảng 1500 từ chuẩn SEO với từ khóa chính là: "{keyword}".
 Yêu cầu cụ thể như sau:
 ---
 1. Tiêu đề SEO (Meta Title):
@@ -71,10 +71,13 @@ results = []
 
 # --- Helpers ---
 async def generate_article(keyword):
-    prompt = SEO_PROMPT.format(keyword=keyword)
+    system_prompt = SEO_PROMPT.format(keyword=keyword)
     response = await openai_client.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Từ khóa chính: {keyword}"}
+        ],
         temperature=0.7
     )
     return response.choices[0].message.content
