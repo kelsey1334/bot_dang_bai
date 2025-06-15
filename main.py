@@ -74,14 +74,17 @@ results = []
 async def generate_article(keyword):
     system_prompt = SEO_PROMPT.format(keyword=keyword)
     response = await openai_client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-4.1-nano",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Từ khóa chính: {keyword}"}
         ],
         temperature=0.7
     )
-    return response.choices[0].message.content.replace("—", "<hr>")
+    article = response.choices[0].message.content
+    article = article.replace('—', '<hr>')
+    article = article.replace('**', '<strong>').replace('<strong><strong>', '<strong>').replace('</strong></strong>', '</strong>')
+    return article
 
 def post_to_wordpress(title, content):
     post = WordPressPost()
