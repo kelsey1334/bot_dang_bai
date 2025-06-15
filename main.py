@@ -8,6 +8,7 @@ import aiohttp
 import aiofiles
 import os
 import openpyxl
+import markdown2
 from wordpress_xmlrpc import Client, WordPressPost
 from wordpress_xmlrpc.methods.posts import NewPost
 
@@ -73,19 +74,19 @@ results = []
 async def generate_article(keyword):
     system_prompt = SEO_PROMPT.format(keyword=keyword)
     response = await openai_client.chat.completions.create(
-        model="gpt-4.1-nano",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Từ khóa chính: {keyword}"}
         ],
         temperature=0.7
     )
-    return response.choices[0].message.content
+    return response.choices[0].message.content.replace("—", "<hr>")
 
 def post_to_wordpress(title, content):
     post = WordPressPost()
     post.title = title
-    post.content = content
+    post.content = markdown2.markdown(content)
     post.post_status = 'publish'
     post_id = wp_client.call(NewPost(post))
     return f"{WORDPRESS_URL}/?p={post_id}"
