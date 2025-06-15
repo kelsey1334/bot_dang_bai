@@ -73,7 +73,7 @@ results = []
 async def generate_article(keyword):
     prompt = SEO_PROMPT.format(keyword=keyword)
     response = await openai_client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7
     )
@@ -84,8 +84,8 @@ def post_to_wordpress(title, content):
     post.title = title
     post.content = content
     post.post_status = 'publish'
-    wp_client.call(NewPost(post))
-    return f"{WORDPRESS_URL}/?p={post.id}"
+    post_id = wp_client.call(NewPost(post))
+    return f"{WORDPRESS_URL}/?p={post_id}"
 
 async def process_keyword(keyword, context):
     await context.bot.send_message(chat_id=context._chat_id, text=f"🔄 Đang xử lý từ khóa: {keyword}")
