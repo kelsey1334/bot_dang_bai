@@ -86,7 +86,7 @@ async def generate_article(keyword):
 def post_to_wordpress(title, content):
     post = WordPressPost()
     post.title = title
-    post.content = markdown2.markdown(content)
+    post.content = str(markdown2.markdown(content))
     post.post_status = 'publish'
     post_id = wp_client.call(NewPost(post))
     return f"{WORDPRESS_URL}/?p={post_id}"
