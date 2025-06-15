@@ -1,121 +1,146 @@
-import json
+# main.py
 import logging
-import pytz
-from datetime import datetime, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
-from apscheduler.schedulers.background import BackgroundScheduler
+import asyncio
+from telegram import Update, InputFile
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from openai import AsyncOpenAI
+import aiohttp
+import aiofiles
+import os
+import openpyxl
+from wordpress_xmlrpc import Client, WordPressPost
+from wordpress_xmlrpc.methods.posts import NewPost
 
-# Logging
+# --- Config ---
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+WORDPRESS_URL = os.getenv("WORDPRESS_URL")
+WORDPRESS_USER = os.getenv("WORDPRESS_USER")
+WORDPRESS_PASS = os.getenv("WORDPRESS_PASS")
+
+SEO_PROMPT = '''Viết một bài blog dài khoảng 1500 từ chuẩn SEO với từ khóa chính là: "{keyword}".
+Yêu cầu cụ thể như sau:
+---
+1. Tiêu đề SEO (Meta Title):
+- Chứa từ khóa chính
+- Dưới 60 ký tự
+- Phản ánh đúng mục đích tìm kiếm (search intent) của người dùng
+2. Meta Description:
+- Dài 150–160 ký tự
+- Chứa từ khóa chính
+- Tóm tắt đúng nội dung bài viết và thu hút người dùng click
+---
+3. Cấu trúc bài viết:
+- Chỉ có 1 thẻ H1 duy nhất:
+- Dưới 70 ký tự
+- Chứa từ khóa chính
+- Diễn tả bao quát toàn bộ chủ đề bài viết
+- Sapo mở đầu ngay sau H1:
+- Bắt đầu bằng từ khóa chính
+- Dài từ 250–350 ký tự
+- Viết theo kiểu gợi mở, đặt câu hỏi hoặc khơi gợi insight người tìm kiếm
+- Tránh viết khô khan hoặc như mô tả kỹ thuật
+---
+4. Thân bài:
+- Có ít nhất 4 tiêu đề H2 (phải chứa từ khóa chính)
+- Mỗi tiêu đề H2 gồm 2 đến 3 tiêu đề H3 bổ trợ
+- H3 cũng nên chứa từ khóa chính hoặc biến thể của từ khóa
+- Nếu phù hợp, có thể sử dụng thẻ H4 để phân tích chuyên sâu hơn
+- Mỗi tiêu đề H2/H3 cần có một đoạn dẫn ngắn gợi mở nội dung
+---
+5. Kết bài:
+- Tạo một tiêu đề H2 là “Kết luận” chỉ để mỗi tiêu đề đề Kết luận không thêm bất cứ gì thêm.
+- Trong đoạn dẫn của kết luận có chứa từ khoá chính.
+- Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng
+- Không được chèn CTA
+6. Tối ưu từ khóa:
+- Mật độ từ khóa chính: 1% đến 1,5% cho một bài viết 1500 từ
+- Phân bố đều ở sapo, H2, H3, thân bài, kết luận
+- Tự nhiên, không nhồi nhét
+- Thêm 3 ba từ khoá tự phụ ngữ nghĩa để bổ trợ
+- In đậm từ khóa chính.
+---
+⚠️ Lưu ý: Viết bằng tiếng Việt, giọng văn rõ ràng, dễ hiểu, không lan man. Ưu tiên thông tin hữu ích, ví dụ thực tế, và có chiều sâu để tăng điểm chuyên môn với Google. Ngoài ra, các tiêu đề không được làm dạng bullet chỉ cần có định dạng tiêu đề là được rồi.'''
+
+# --- Setup ---
 logging.basicConfig(level=logging.INFO)
+openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+wp_client = Client(WORDPRESS_URL, WORDPRESS_USER, WORDPRESS_PASS)
+keywords_queue = asyncio.Queue()
+results = []
 
-DATA_FILE = "data.json"
-CATEGORY_IN = ['Lương', 'Bán hàng', 'Thu nợ', 'Được cho']
-CATEGORY_OUT = ['Tiền đi lại', 'Ăn uống', 'Mua sắm', 'Y tế', 'Việc riêng', 'Đi chơi']
+# --- Helpers ---
+async def generate_article(keyword):
+    prompt = SEO_PROMPT.format(keyword=keyword)
+    response = await openai_client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7
+    )
+    return response.choices[0].message.content
 
-def load_data():
+def post_to_wordpress(title, content):
+    post = WordPressPost()
+    post.title = title
+    post.content = content
+    post.post_status = 'publish'
+    wp_client.call(NewPost(post))
+    return f"{WORDPRESS_URL}/?p={post.id}"
+
+async def process_keyword(keyword, context):
+    await context.bot.send_message(chat_id=context._chat_id, text=f"🔄 Đang xử lý từ khóa: {keyword}")
     try:
-        with open(DATA_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return {}
+        article = await generate_article(keyword)
+        title = keyword.capitalize()
+        link = post_to_wordpress(title, article)
+        results.append([len(results)+1, keyword, link])
+        await context.bot.send_message(chat_id=context._chat_id, text=f"✅ Đăng thành công: {link}")
+    except Exception as e:
+        await context.bot.send_message(chat_id=context._chat_id, text=f"❌ Lỗi với từ khóa {keyword}: {str(e)}")
 
-def save_data(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+async def write_report_and_send(context):
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["STT", "Keyword", "Link đăng bài"])
+    for row in results:
+        sheet.append(row)
+    filepath = "/tmp/report.xlsx"
+    workbook.save(filepath)
+    await context.bot.send_document(chat_id=context._chat_id, document=InputFile(filepath))
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Xin chào! Dùng /in hoặc /out + số tiền để ghi nhận chi tiêu/thu nhập.")
+# --- Handlers ---
+async def handle_txt_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    doc = update.message.document
+    if not doc.file_name.endswith(".txt"):
+        await update.message.reply_text("❌ Vui lòng gửi file .txt chứa danh sách từ khóa.")
+        return
+    file = await context.bot.get_file(doc.file_id)
+    path = f"/tmp/{doc.file_name}"
+    await file.download_to_drive(path)
+    async with aiofiles.open(path, mode='r') as f:
+        async for line in f:
+            keyword = line.strip()
+            if keyword:
+                await keywords_queue.put(keyword)
+    await update.message.reply_text("📥 Đã nhận file. Bắt đầu xử lý...")
+    while not keywords_queue.empty():
+        keyword = await keywords_queue.get()
+        await process_keyword(keyword, context)
+    await write_report_and_send(context)
 
-async def handle_in(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if len(context.args) != 1 or not context.args[0].isdigit():
-        return await update.message.reply_text("Vui lòng nhập đúng định dạng: /in [số tiền]")
-    amount = int(context.args[0])
-    keyboard = [[InlineKeyboardButton(cat, callback_data=f"in|{cat}|{amount}")] for cat in CATEGORY_IN]
-    await update.message.reply_text("Nguồn thu là gì?", reply_markup=InlineKeyboardMarkup(keyboard))
+async def handle_keyword(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("❌ Vui lòng nhập từ khóa. Ví dụ: /keyword marketing online")
+        return
+    keyword = ' '.join(context.args)
+    await process_keyword(keyword, context)
+    await write_report_and_send(context)
 
-async def handle_out(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if len(context.args) != 1 or not context.args[0].isdigit():
-        return await update.message.reply_text("Vui lòng nhập đúng định dạng: /out [số tiền]")
-    amount = int(context.args[0])
-    keyboard = [[InlineKeyboardButton(cat, callback_data=f"out|{cat}|{amount}")] for cat in CATEGORY_OUT]
-    await update.message.reply_text("Khoản chi là gì?", reply_markup=InlineKeyboardMarkup(keyboard))
+# --- Main ---
+app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+app.add_handler(MessageHandler(filters.Document.ALL, handle_txt_file))
+app.add_handler(CommandHandler("keyword", handle_keyword))
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    kind, category, amount = query.data.split("|")
-    user_id = str(query.from_user.id)
-    now = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).strftime("%Y-%m-%d")
-    data = load_data()
-
-    data.setdefault(user_id, {}).setdefault(now, {}).setdefault(kind, {}).setdefault(category, 0)
-    data[user_id][now][kind][category] += int(amount)
-
-    save_data(data)
-    await query.edit_message_text(f"Đã ghi nhận {kind.upper()} {amount} VND vào mục *{category}*", parse_mode="Markdown")
-
-async def send_daily_summary(context: ContextTypes.DEFAULT_TYPE):
-    bot = context.bot
-    now = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh"))
-    today = now.strftime("%Y-%m-%d")
-    yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
-    month = now.strftime("%Y-%m")
-
-    data = load_data()
-
-    for user_id, records in data.items():
-        total_in_yesterday = total_out_yesterday = 0
-        total_in_month = total_out_month = 0
-        detail_in = detail_out = {}
-
-        for date, types in records.items():
-            if date.startswith(month):
-                for k, v in types.get("in", {}).items():
-                    total_in_month += v
-                for k, v in types.get("out", {}).items():
-                    total_out_month += v
-
-            if date == yesterday:
-                for k, v in types.get("in", {}).items():
-                    total_in_yesterday += v
-                    detail_in[k] = detail_in.get(k, 0) + v
-                for k, v in types.get("out", {}).items():
-                    total_out_yesterday += v
-                    detail_out[k] = detail_out.get(k, 0) + v
-
-        message = f"📊 *Báo cáo chi tiêu hôm qua ({yesterday}):*\n"
-        message += f"\n💰 Thu nhập: {total_in_yesterday:,} VND"
-        for cat, val in detail_in.items():
-            message += f"\n  - {cat}: {val:,} VND"
-
-        message += f"\n\n💸 Chi tiêu: {total_out_yesterday:,} VND"
-        for cat, val in detail_out.items():
-            message += f"\n  - {cat}: {val:,} VND"
-
-        message += f"\n\n📅 Tổng tháng ({month}):\n  + Thu: {total_in_month:,} VND\n  + Chi: {total_out_month:,} VND"
-
-        try:
-            await bot.send_message(chat_id=int(user_id), text=message, parse_mode="Markdown")
-        except Exception as e:
-            logging.error(f"Không gửi được báo cáo cho {user_id}: {e}")
-
-if __name__ == "__main__":
-    import os
-    from dotenv import load_dotenv
-
-    load_dotenv()
-    TOKEN = os.getenv("BOT_TOKEN")
-
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("in", handle_in))
-    app.add_handler(CommandHandler("out", handle_out))
-    app.add_handler(CallbackQueryHandler(button_handler))
-
-    scheduler = BackgroundScheduler(timezone='Asia/Ho_Chi_Minh')
-    scheduler.add_job(send_daily_summary, 'cron', hour=8, minute=0, args=[app.job_queue])
-    scheduler.start()
-
+if __name__ == '__main__':
+    print("Bot is running...")
     app.run_polling()
