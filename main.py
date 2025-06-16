@@ -87,26 +87,46 @@ async def generate_article(keyword):
         ],
         temperature=0.7
     )
-    article = response.choices[0].message.content.replace('—', '<hr>')
-    article = re.sub(r'(?i)^\s*Sapo:\s*\n?', '', article, flags=re.MULTILINE)
-    return article
+    raw = response.choices[0].message.content.replace('—', '<hr>')
+    raw = re.sub(r'(?i)^\s*Sapo:\s*\n?', '', raw, flags=re.MULTILINE)
 
-def post_to_wordpress(title, content):
-    html = markdown2.markdown(content)
-    html = format_headings_and_keywords(html, title)
+    meta_title_match = re.search(r"(?i)^1\..*?Meta Title.*?:\s*(.*)", raw, re.MULTILINE)
+    meta_description_match = re.search(r"(?i)^2\..*?Meta Description.*?:\s*(.*)", raw, re.MULTILINE)
+
+    meta_title = meta_title_match.group(1).strip() if meta_title_match else keyword
+    meta_description = meta_description_match.group(1).strip() if meta_description_match else ""
+
+    content_start = re.search(r"(?i)^3\..*?Cấu trúc bài viết", raw)
+    content = raw[content_start.start():] if content_start else raw
+
+    return {
+        "meta_title": meta_title,
+        "meta_description": meta_description,
+        "content": content
+    }
+
+def post_to_wordpress(keyword, article_data):
+    html = markdown2.markdown(article_data["content"])
+    html = format_headings_and_keywords(html, keyword)
+
     post = WordPressPost()
-    post.title = title
+    post.title = article_data["meta_title"]
     post.content = str(html)
     post.post_status = 'publish'
+
+    post.custom_fields = [
+        {'key': 'rank_math_description', 'value': article_data["meta_description"]},
+        {'key': 'rank_math_title', 'value': article_data["meta_title"]},
+    ]
+
     post_id = wp_client.call(NewPost(post))
     return f"{WORDPRESS_URL}/?p={post_id}"
 
 async def process_keyword(keyword, context):
     await context.bot.send_message(chat_id=context._chat_id, text=f"🔄 Đang xử lý từ khóa: {keyword}")
     try:
-        article = await generate_article(keyword)
-        title = keyword.capitalize()
-        link = post_to_wordpress(title, article)
+        article_data = await generate_article(keyword)
+        link = post_to_wordpress(keyword, article_data)
         results.append([len(results)+1, keyword, link])
         await context.bot.send_message(chat_id=context._chat_id, text=f"✅ Đăng thành công: {link}")
     except Exception as e:
