@@ -42,6 +42,7 @@ Yêu cầu cụ thể như sau:
 - Dài từ 250–350 ký tự
 - Viết theo kiểu gợi mở, đặt câu hỏi hoặc khơi gợi insight người tìm kiếm
 - Tránh viết khô khan hoặc như mô tả kỹ thuật
+- Tôi không cần bạn phải ghi rõ là Sapo:. Tôi là một SEO nên tôi đã biết rồi.
 ---
 4. Thân bài:
 - Có ít nhất 4 tiêu đề H2 (phải chứa từ khóa chính)
@@ -58,7 +59,7 @@ Yêu cầu cụ thể như sau:
 - Thêm 3 ba từ khoá tự phụ ngữ nghĩa để bổ trợ
 - In đậm từ khóa chính.
 ---
-⚠️ Lưu ý: Viết bằng tiếng Việt, giọng văn rõ ràng, dễ hiểu, không lan man. Ưu tiên thông tin hữu ích, ví dụ thực tế, và có chiều sâu để tăng điểm chuyên môn với Google. Ngoài ra, các tiêu đề không được làm dạng bullet chỉ cần có định dạng tiêu đề là được rồi.'''
+⚠️ Lưu ý: Viết bằng tiếng Việt, giọng văn rõ ràng, dễ hiểu, không lan man. Ưu tiên thông tin hữu ích, ví dụ thực tế, và có chiều sâu để tăng điểm chuyên môn với Google. Ngoài ra, các tiêu đề không được làm dạng bullet chỉ cần có định dạng tiêu đề là được rồi. Không cần phải có những thông tin lưu ý và câu hỏi mở rộng gì, thứ tôi cần chỉ là một bài content chuẩn seo'''
 
 # --- Setup ---
 logging.basicConfig(level=logging.INFO)
