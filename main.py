@@ -118,22 +118,12 @@ def post_to_wordpress(keyword, article_data):
     post.content = str(html)
     post.post_status = 'publish'
 
+    # Đã sửa lỗi ở đây
     post.custom_fields = [
         {'key': 'rank_math_title', 'value': article_data["meta_title"]},
         {'key': 'rank_math_description', 'value': article_data["meta_description"]},
         {'key': 'rank_math_focus_keyword', 'value': article_data["focus_keyword"]},
         {'key': 'rank_math_keywords', 'value': article_data["focus_keyword"]}
-    ]},
-        {'key': 'rank_math_description', 'value': article_data["meta_description"]},
-        {'key': 'rank_math_focus_keyword', 'value': article_data["focus_keyword"]},
-        {'key': 'rank_math_keywords', 'value': article_data["focus_keyword"]}
-    ]},
-        {'key': 'rank_math_description', 'value': article_data["meta_description"]},
-        {'key': 'rank_math_focus_keyword', 'value': article_data["focus_keyword"]},
-        {'key': 'rank_math_keywords', 'value': article_data["focus_keyword"]},
-    ]},
-        {'key': 'rank_math_description', 'value': article_data["meta_description"]},
-        {'key': 'rank_math_focus_keyword', 'value': article_data["focus_keyword"]},
     ]
 
     post_id = wp_client.call(NewPost(post))
