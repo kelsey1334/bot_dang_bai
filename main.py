@@ -52,7 +52,7 @@ Yêu cầu cụ thể như sau:
 - Phải có một tiêu đề 2 là “Kết luận” chỉ để mỗi tiêu đề đề Kết luận không thêm bất cứ gì thêm. Trong đoạn dẫn của kết luận có chứa từ khoá chính. Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng và không được chèn CTA.
 ---
 5. Tối ưu từ khóa:
-- Mật độ từ khóa chính: 1% đến 1,5% cho một bài viết 2500 từ
+- Mật độ từ khóa chính: 1% đến 1,5% cho một bài viết 1500 từ
 - Phân bố đều ở sapo, H2, H3, thân bài, kết luận
 - Tự nhiên, không nhồi nhét
 - Thêm 3 ba từ khoá tự phụ ngữ nghĩa để bổ trợ
@@ -87,7 +87,7 @@ async def generate_article(keyword):
         temperature=0.7
     )
     article = response.choices[0].message.content.replace('—', '<hr>')
-    article = re.sub(r'^Sapo:\s*', '', article, flags=re.IGNORECASE | re.MULTILINE)
+    article = re.sub(r'(?i)^\s*Sapo:\s*\n?', '', article, flags=re.MULTILINE)
     return article
 
 def post_to_wordpress(title, content):
