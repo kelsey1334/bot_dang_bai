@@ -34,14 +34,14 @@ Yêu cầu cụ thể như sau:
 ---
 3. Cấu trúc bài viết:
 - Chỉ có 1 thẻ H1 duy nhất:
-- Dưới 70 ký tự
-- Chứa từ khóa chính
-- Diễn tả bao quát toàn bộ chủ đề bài viết
-- Sapo mở đầu ngay sau H1:
++ Dưới 70 ký tự
++ Chứa từ khóa chính
++ Diễn tả bao quát toàn bộ chủ đề bài viết
+- Có một đoạn Sapo mở đầu ngay sau H1:
 - Bắt đầu bằng từ khóa chính
-- Dài từ 250–350 ký tự
-- Viết theo kiểu gợi mở, đặt câu hỏi hoặc khơi gợi insight người tìm kiếm
-- Tránh viết khô khan hoặc như mô tả kỹ thuật
++ Dài từ 250–350 ký tự
++ Viết theo kiểu gợi mở, đặt câu hỏi hoặc khơi gợi insight người tìm kiếm
++ Tránh viết khô khan hoặc như mô tả kỹ thuật
 ---
 4. Thân bài:
 - Có ít nhất 4 tiêu đề H2 (phải chứa từ khóa chính)
@@ -62,7 +62,7 @@ Yêu cầu cụ thể như sau:
 - Thêm 3 ba từ khoá tự phụ ngữ nghĩa để bổ trợ
 - In đậm từ khóa chính.
 ---
-⚠️ Lưu ý: Viết bằng tiếng Việt, giọng văn rõ ràng, dễ hiểu, không lan man. Ưu tiên thông tin hữu ích, ví dụ thực tế, và có chiều sâu để tăng điểm chuyên môn với Google. Ngoài ra, các tiêu đề không được làm dạng bullet chỉ cần có định dạng tiêu đề là được rồi.'''
+⚠️ Lưu ý: Viết bằng tiếng Việt, giọng văn rõ ràng, dễ hiểu, không lan man. Ưu tiên thông tin hữu ích, ví dụ thực tế, và có chiều sâu để tăng điểm chuyên môn với Google. Ngoài ra, các tiêu đề không được làm dạng liệt kê 1.1 1.2 1.3,......'''
 
 # --- Setup ---
 logging.basicConfig(level=logging.INFO)
