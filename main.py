@@ -92,16 +92,20 @@ async def generate_article(keyword):
 
     meta_title_match = re.search(r"(?i)^1\..*?Meta Title.*?:\s*(.*)", raw, re.MULTILINE)
     meta_description_match = re.search(r"(?i)^2\..*?Meta Description.*?:\s*(.*)", raw, re.MULTILINE)
+    h1_match = re.search(r'#\s*(.*?)\n', raw)
 
     meta_title = meta_title_match.group(1).strip() if meta_title_match else keyword
     meta_description = meta_description_match.group(1).strip() if meta_description_match else ""
+    h1_title = h1_match.group(1).strip() if h1_match else keyword
 
-    content_start = re.search(r"(?i)^3\..*?Cấu trúc bài viết", raw)
-    content = raw[content_start.start():] if content_start else raw
+    content_start = h1_match.end() if h1_match else 0
+    content = raw[content_start:].strip()
 
     return {
+        "post_title": h1_title,
         "meta_title": meta_title,
         "meta_description": meta_description,
+        "focus_keyword": keyword,
         "content": content
     }
 
@@ -110,13 +114,14 @@ def post_to_wordpress(keyword, article_data):
     html = format_headings_and_keywords(html, keyword)
 
     post = WordPressPost()
-    post.title = article_data["meta_title"]
+    post.title = article_data["post_title"]
     post.content = str(html)
     post.post_status = 'publish'
 
     post.custom_fields = [
-        {'key': 'rank_math_description', 'value': article_data["meta_description"]},
         {'key': 'rank_math_title', 'value': article_data["meta_title"]},
+        {'key': 'rank_math_description', 'value': article_data["meta_description"]},
+        {'key': 'rank_math_focus_keyword', 'value': article_data["focus_keyword"]},
     ]
 
     post_id = wp_client.call(NewPost(post))
