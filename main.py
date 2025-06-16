@@ -43,15 +43,15 @@ Yêu cầu cụ thể như sau:
 + Viết theo kiểu gợi mở, đặt câu hỏi hoặc khơi gợi insight người tìm kiếm
 + Tránh viết khô khan hoặc như mô tả kỹ thuật
 ---
-4. Thân bài:
+4. Nội dung bài:
 - Có ít nhất 4 tiêu đề H2 (phải chứa từ khóa chính)
 - Mỗi tiêu đề H2 gồm 2 đến 3 tiêu đề H3 bổ trợ
 - H3 cũng nên chứa từ khóa chính hoặc biến thể của từ khóa
 - Nếu phù hợp, có thể sử dụng thẻ H4 để phân tích chuyên sâu hơn
 - Mỗi tiêu đề H2/H3 cần có một đoạn dẫn ngắn gợi mở nội dung
+- Phải có một tiêu đề 2 là “Kết luận” chỉ để mỗi tiêu đề đề Kết luận không thêm bất cứ gì thêm. Trong đoạn dẫn của kết luận có chứa từ khoá chính. Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng và không được chèn CTA.
 ---
-5. Kết bài: Tạo một tiêu đề H2 là “Kết luận” chỉ để mỗi tiêu đề đề Kết luận không thêm bất cứ gì thêm. Trong đoạn dẫn của kết luận có chứa từ khoá chính. Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng và không được chèn CTA.
-6. Tối ưu từ khóa:
+5. Tối ưu từ khóa:
 - Mật độ từ khóa chính: 1% đến 1,5% cho một bài viết 1500 từ
 - Phân bố đều ở sapo, H2, H3, thân bài, kết luận
 - Tự nhiên, không nhồi nhét
