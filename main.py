@@ -1,6 +1,7 @@
 # main.py
 import logging
 import asyncio
+import re
 from telegram import Update, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from openai import AsyncOpenAI
@@ -71,6 +72,16 @@ keywords_queue = asyncio.Queue()
 results = []
 
 # --- Helpers ---
+def format_headings_and_keywords(html, keyword):
+    # In đậm nội dung các thẻ heading
+    for tag in ['h1', 'h2', 'h3', 'h4']:
+        pattern = fr'<{tag}>(.*?)</{tag}>'
+        repl = fr'<{tag}><strong>\1</strong></{tag}>'
+        html = re.sub(pattern, repl, html, flags=re.DOTALL)
+    # In đậm từ khóa chính
+    html = re.sub(re.escape(keyword), fr'<strong>{keyword}</strong>', html, flags=re.IGNORECASE)
+    return html
+
 async def generate_article(keyword):
     system_prompt = SEO_PROMPT.format(keyword=keyword)
     response = await openai_client.chat.completions.create(
@@ -81,15 +92,15 @@ async def generate_article(keyword):
         ],
         temperature=0.7
     )
-    article = response.choices[0].message.content
-    article = article.replace('—', '<hr>')
-    article = article.replace('**', '<strong>').replace('<strong><strong>', '<strong>').replace('</strong></strong>', '</strong>')
+    article = response.choices[0].message.content.replace('—', '<hr>')
     return article
 
 def post_to_wordpress(title, content):
+    html = markdown2.markdown(content)
+    html = format_headings_and_keywords(html, title)
     post = WordPressPost()
     post.title = title
-    post.content = str(markdown2.markdown(content))
+    post.content = str(html)
     post.post_status = 'publish'
     post_id = wp_client.call(NewPost(post))
     return f"{WORDPRESS_URL}/?p={post_id}"
