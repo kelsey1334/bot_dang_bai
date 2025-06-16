@@ -50,11 +50,7 @@ Yêu cầu cụ thể như sau:
 - Nếu phù hợp, có thể sử dụng thẻ H4 để phân tích chuyên sâu hơn
 - Mỗi tiêu đề H2/H3 cần có một đoạn dẫn ngắn gợi mở nội dung
 ---
-5. Kết bài:
-- Tạo một tiêu đề H2 là “Kết luận” chỉ để mỗi tiêu đề đề Kết luận không thêm bất cứ gì thêm.
-- Trong đoạn dẫn của kết luận có chứa từ khoá chính.
-- Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng
-- Không được chèn CTA
+5. Kết bài: Tạo một tiêu đề H2 là “Kết luận” chỉ để mỗi tiêu đề đề Kết luận không thêm bất cứ gì thêm. Trong đoạn dẫn của kết luận có chứa từ khoá chính. Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng và không được chèn CTA.
 6. Tối ưu từ khóa:
 - Mật độ từ khóa chính: 1% đến 1,5% cho một bài viết 1500 từ
 - Phân bố đều ở sapo, H2, H3, thân bài, kết luận
