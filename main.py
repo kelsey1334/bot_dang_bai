@@ -1,4 +1,3 @@
-# main.py
 import logging
 import asyncio
 import re
@@ -12,6 +11,10 @@ import openpyxl
 import markdown2
 from wordpress_xmlrpc import Client, WordPressPost
 from wordpress_xmlrpc.methods.posts import NewPost
+from wordpress_xmlrpc.methods.media import UploadFile
+from wordpress_xmlrpc.compat import xmlrpc_client
+from PIL import Image
+from io import BytesIO
 
 # --- Config ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -109,8 +112,72 @@ async def generate_article(keyword):
         "content": content
     }
 
-def post_to_wordpress(keyword, article_data):
-    html = markdown2.markdown(article_data["content"])
+async def create_and_process_image(keyword, index):
+    prompt = f"Ảnh minh họa cho bài viết với từ khóa: {keyword}, phong cách phù hợp với nội dung SEO"
+    response = await openai_client.images.generate(
+        model="dall-e-3",
+        prompt=prompt,
+        n=1,
+        size="1024x512"
+    )
+    img_url = response.data[0].url
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(img_url) as resp:
+            img_bytes = await resp.read()
+
+    img = Image.open(BytesIO(img_bytes)).convert('RGB')
+    img = img.resize((800, 400))
+
+    quality = 85
+    buffer = BytesIO()
+    while True:
+        buffer.seek(0)
+        buffer.truncate()
+        img.save(buffer, format='JPEG', quality=quality)
+        size_kb = buffer.tell() / 1024
+        if size_kb <= 100 or quality <= 30:
+            break
+        quality -= 5
+
+    slug = f"anh-mo-ta-{keyword.replace(' ', '-').lower()}-{index}"
+    filepath = f"/tmp/{slug}.jpg"
+    with open(filepath, 'wb') as f:
+        f.write(buffer.getvalue())
+
+    return filepath, slug
+
+def upload_image_to_wordpress(filepath, slug, alt, caption):
+    with open(filepath, 'rb') as img_file:
+        data = {
+            'name': f"{slug}.jpg",
+            'type': 'image/jpeg',
+            'bits': xmlrpc_client.Binary(img_file.read()),
+        }
+    response = wp_client.call(UploadFile(data))
+    attachment_url = response['url']
+    # Không lưu meta alt, caption riêng mà sẽ chèn trực tiếp khi chèn ảnh vào bài
+    return attachment_url
+
+def insert_images_in_content(content, image_urls, alts, captions):
+    parts = content.split('\n')
+    n = len(parts)
+
+    figure_template = lambda url, alt, cap: f'''
+<figure>
+  <img src="{url}" alt="{alt}" width="800" height="400"/>
+  <figcaption>{cap}</figcaption>
+</figure>'''
+
+    parts.insert(1, figure_template(image_urls[0], alts[0], captions[0]))  # Đầu bài
+    parts.insert(n//2, figure_template(image_urls[1], alts[1], captions[1]))  # Giữa bài
+    parts.insert(n-2, figure_template(image_urls[2], alts[2], captions[2]))  # Gần cuối bài
+
+    return '\n'.join(parts)
+
+def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
+    content_with_images = insert_images_in_content(article_data["content"], image_urls, alts, captions)
+    html = markdown2.markdown(content_with_images)
     html = format_headings_and_keywords(html, keyword)
 
     post = WordPressPost()
@@ -118,7 +185,6 @@ def post_to_wordpress(keyword, article_data):
     post.content = str(html)
     post.post_status = 'publish'
 
-    # Đã sửa lỗi ở đây
     post.custom_fields = [
         {'key': 'rank_math_title', 'value': article_data["meta_title"]},
         {'key': 'rank_math_description', 'value': article_data["meta_description"]},
@@ -133,7 +199,21 @@ async def process_keyword(keyword, context):
     await context.bot.send_message(chat_id=context._chat_id, text=f"🔄 Đang xử lý từ khóa: {keyword}")
     try:
         article_data = await generate_article(keyword)
-        link = post_to_wordpress(keyword, article_data)
+
+        # Tạo và upload 3 ảnh
+        image_urls = []
+        alts = []
+        captions = []
+        for i in range(1, 4):
+            filepath, slug = await create_and_process_image(keyword, i)
+            alt_text = f"Ảnh minh họa {i} cho bài viết với từ khóa {keyword}"
+            caption_text = f"Caption ảnh {i} liên quan đến {keyword}"
+            url = upload_image_to_wordpress(filepath, slug, alt_text, caption_text)
+            image_urls.append(url)
+            alts.append(alt_text)
+            captions.append(caption_text)
+
+        link = post_to_wordpress(keyword, article_data, image_urls, alts, captions)
         results.append([len(results)+1, keyword, link])
         await context.bot.send_message(chat_id=context._chat_id, text=f"✅ Đăng thành công: {link}")
     except Exception as e:
