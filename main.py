@@ -1,7 +1,6 @@
 import logging
 import asyncio
 import re
-import unicodedata
 from telegram import Update, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from openai import AsyncOpenAI
@@ -81,12 +80,6 @@ def format_headings_and_keywords(html, keyword):
     html = re.sub(re.escape(keyword), fr'<strong>{keyword}</strong>', html, flags=re.IGNORECASE)
     return html
 
-def slugify(text):
-    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
-    text = re.sub(r'[^a-zA-Z0-9\- ]', '', text).lower()
-    text = re.sub(r'\s+', '-', text)
-    return text.strip('-')
-
 async def generate_article(keyword):
     system_prompt = SEO_PROMPT.format(keyword=keyword)
     response = await openai_client.chat.completions.create(
@@ -119,34 +112,19 @@ async def generate_article(keyword):
         "content": content
     }
 
-def extract_captions_from_content(content, keyword):
-    paragraphs = [p.strip() for p in content.split('\n') if p.strip()]
-    n = len(paragraphs)
-    captions = []
-    for idx in [0, n//2, n-1]:
-        para = paragraphs[idx] if idx < n else ""
-        snippet = para[:100]
-        if keyword.lower() not in snippet.lower():
-            snippet = f"{keyword}: {snippet}"
-        captions.append(snippet)
-    return captions
+async def generate_image_caption(keyword, index):
+    prompt = f"Viết caption ngắn gọn, súc tích cho ảnh minh họa số {index} liên quan đến từ khóa '{keyword}', bằng tiếng Việt."
+    response = await openai_client.chat.completions.create(
+        model="gpt-4.1-nano",
+        messages=[
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7
+    )
+    caption = response.choices[0].message.content.strip()
+    return caption
 
-def draw_caption_on_image(image: Image.Image, caption: str):
-    draw = ImageDraw.Draw(image)
-    try:
-        font = ImageFont.truetype("arial.ttf", 20)
-    except:
-        font = ImageFont.load_default()
-
-    text = caption
-    margin = 10
-    text_width, text_height = draw.textsize(text, font=font)
-    x, y = margin, image.height - text_height - margin
-    draw.rectangle([(x - 5, y - 5), (x + text_width + 5, y + text_height + 5)], fill=(0, 0, 0, 160))
-    draw.text((x, y), text, fill=(255, 255, 255), font=font)
-    return image
-
-async def create_and_process_image(keyword, index, caption):
+async def create_and_process_image(keyword, index, caption_text):
     prompt = f"Ảnh minh họa cho bài viết với từ khóa: {keyword}, phong cách phù hợp với nội dung SEO"
     response = await openai_client.images.generate(
         model="dall-e-3",
@@ -162,7 +140,22 @@ async def create_and_process_image(keyword, index, caption):
 
     img = Image.open(BytesIO(img_bytes)).convert('RGB')
     img = img.resize((800, 400))
-    img = draw_caption_on_image(img, caption)
+
+    draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.truetype("arial.ttf", 16)
+    except:
+        font = ImageFont.load_default()
+
+    bbox = draw.textbbox((0, 0), caption_text, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+
+    x = 10
+    y = img.height - text_height - 10
+
+    draw.rectangle([x - 5, y - 5, x + text_width + 5, y + text_height + 5], fill=(0, 0, 0, 128))
+    draw.text((x, y), caption_text, font=font, fill=(255, 255, 255))
 
     quality = 85
     buffer = BytesIO()
@@ -175,7 +168,7 @@ async def create_and_process_image(keyword, index, caption):
             break
         quality -= 5
 
-    slug = f"anh-mo-ta-{slugify(keyword)}-{index}"
+    slug = f"anh-mo-ta-{keyword.replace(' ', '-').lower()}-{index}"
     filepath = f"/tmp/{slug}.jpg"
     with open(filepath, 'wb') as f:
         f.write(buffer.getvalue())
@@ -203,9 +196,9 @@ def insert_images_in_content(content, image_urls, alts, captions):
   <figcaption>{cap}</figcaption>
 </figure>'''
 
-    parts.insert(1, figure_template(image_urls[0], alts[0], captions[0]))
-    parts.insert(n//2, figure_template(image_urls[1], alts[1], captions[1]))
-    parts.insert(n-2, figure_template(image_urls[2], alts[2], captions[2]))
+    parts.insert(1, figure_template(image_urls[0], alts[0], captions[0]))  # Đầu bài
+    parts.insert(n//2, figure_template(image_urls[1], alts[1], captions[1]))  # Giữa bài
+    parts.insert(n-2, figure_template(image_urls[2], alts[2], captions[2]))  # Gần cuối bài
 
     return '\n'.join(parts)
 
@@ -218,7 +211,6 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     post.title = article_data["post_title"]
     post.content = str(html)
     post.post_status = 'publish'
-    post.slug = slugify(keyword)
 
     post.custom_fields = [
         {'key': 'rank_math_title', 'value': article_data["meta_title"]},
@@ -228,24 +220,31 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     ]
 
     post_id = wp_client.call(NewPost(post))
-    return f"{WORDPRESS_URL}/{post.slug}/"
+    return f"{WORDPRESS_URL}/?p={post_id}"
 
 async def process_keyword(keyword, context):
     await context.bot.send_message(chat_id=context._chat_id, text=f"🔄 Đang xử lý từ khóa: {keyword}")
     try:
         article_data = await generate_article(keyword)
-        captions = extract_captions_from_content(article_data["content"], keyword)
+
         image_urls = []
         alts = []
-        for i, caption in enumerate(captions, start=1):
-            filepath, slug = await create_and_process_image(keyword, i, caption)
-            alt_text = caption
-            url = upload_image_to_wordpress(filepath, slug, alt_text, caption)
+        captions = []
+
+        for i in range(1, 4):
+            caption_text = await generate_image_caption(keyword, i)
+            filepath, slug = await create_and_process_image(keyword, i, caption_text)
+            alt_text = f"Ảnh minh họa {i} cho bài viết với từ khóa {keyword}"
+            url = upload_image_to_wordpress(filepath, slug, alt_text, caption_text)
+
             image_urls.append(url)
             alts.append(alt_text)
+            captions.append(caption_text)
+
         link = post_to_wordpress(keyword, article_data, image_urls, alts, captions)
-        results.append([len(results)+1, keyword, link])
+        results.append([len(results) + 1, keyword, link])
         await context.bot.send_message(chat_id=context._chat_id, text=f"✅ Đăng thành công: {link}")
+
     except Exception as e:
         await context.bot.send_message(chat_id=context._chat_id, text=f"❌ Lỗi với từ khóa {keyword}: {str(e)}")
 
