@@ -280,7 +280,7 @@ async def process_keyword(keyword, context):
 
         for i, prompt_text in enumerate(image_prompts, 1):
             filepath, slug = await create_and_process_image(prompt_text, keyword, i, image_captions[i-1])
-            alt_text = f"Ảnh minh họa phần {i} bài viết"
+            alt_text = image_captions[i-1]  # alt giống caption
             url = upload_image_to_wordpress(filepath, slug, alt_text, image_captions[i-1])
             image_urls.append(url)
             alts.append(alt_text)
