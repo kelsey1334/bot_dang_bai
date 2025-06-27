@@ -64,14 +64,12 @@ Yêu cầu cụ thể như sau:
 ---
 ⚠️ Lưu ý: Viết bằng tiếng Việt, giọng văn rõ ràng, dễ hiểu, không lan man. Ưu tiên thông tin hữu ích, ví dụ thực tế, và có chiều sâu để tăng điểm chuyên môn với Google. Ngoài ra, các tiêu đề không được làm dạng bullet chỉ cần có định dạng tiêu đề là được rồi. Không cần phải có những thông tin lưu ý và câu hỏi mở rộng gì, thứ tôi cần chỉ là một bài content chuẩn seo'''
 
-# --- Setup ---
 logging.basicConfig(level=logging.INFO)
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 wp_client = Client(WORDPRESS_URL, WORDPRESS_USER, WORDPRESS_PASS)
 keywords_queue = asyncio.Queue()
 results = []
 
-# --- Helpers ---
 def format_headings_and_keywords(html, keyword):
     for tag in ['h1', 'h2', 'h3', 'h4']:
         pattern = fr'<{tag}>(.*?)</{tag}>'
@@ -112,23 +110,27 @@ async def generate_article(keyword):
         "content": content
     }
 
-async def generate_image_caption(keyword, index):
-    prompt = f"Viết caption ngắn gọn, súc tích cho ảnh minh họa số {index} liên quan đến từ khóa '{keyword}', bằng tiếng Việt."
+async def split_content_into_three_parts(content):
+    lines = content.split('\n')
+    n = len(lines)
+    part1 = '\n'.join(lines[: n//3])
+    part2 = '\n'.join(lines[n//3: 2*n//3])
+    part3 = '\n'.join(lines[2*n//3 :])
+    return part1, part2, part3
+
+async def generate_caption(prompt_text, index):
+    caption_prompt = f"Viết caption ngắn gọn, súc tích cho ảnh minh họa phần {index} với nội dung sau: {prompt_text}"
     response = await openai_client.chat.completions.create(
         model="gpt-4.1-nano",
-        messages=[
-            {"role": "user", "content": prompt}
-        ],
+        messages=[{"role": "user", "content": caption_prompt}],
         temperature=0.7
     )
-    caption = response.choices[0].message.content.strip()
-    return caption
+    return response.choices[0].message.content.strip()
 
-async def create_and_process_image(keyword, index, caption_text):
-    prompt = f"Ảnh minh họa cho bài viết với từ khóa: {keyword}, phong cách phù hợp với nội dung SEO"
+async def create_and_process_image(prompt_text, keyword, index, caption_text):
     response = await openai_client.images.generate(
         model="dall-e-3",
-        prompt=prompt,
+        prompt=prompt_text,
         n=1,
         size="1024x1024"
     )
@@ -150,10 +152,8 @@ async def create_and_process_image(keyword, index, caption_text):
     bbox = draw.textbbox((0, 0), caption_text, font=font)
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
-
     x = 10
     y = img.height - text_height - 10
-
     draw.rectangle([x - 5, y - 5, x + text_width + 5, y + text_height + 5], fill=(0, 0, 0, 128))
     draw.text((x, y), caption_text, font=font, fill=(255, 255, 255))
 
@@ -226,25 +226,34 @@ async def process_keyword(keyword, context):
     await context.bot.send_message(chat_id=context._chat_id, text=f"🔄 Đang xử lý từ khóa: {keyword}")
     try:
         article_data = await generate_article(keyword)
+        part1, part2, part3 = await split_content_into_three_parts(article_data["content"])
+
+        image_prompts = [
+            f"Ảnh minh họa nội dung đầu bài viết: {part1[:200]}",
+            f"Ảnh minh họa nội dung giữa bài viết: {part2[:200]}",
+            f"Ảnh minh họa nội dung cuối bài viết: {part3[:200]}"
+        ]
+
+        image_captions = []
+        for i, prompt_text in enumerate(image_prompts, 1):
+            caption = await generate_caption(prompt_text, i)
+            image_captions.append(caption)
 
         image_urls = []
         alts = []
         captions = []
 
-        for i in range(1, 4):
-            caption_text = await generate_image_caption(keyword, i)
-            filepath, slug = await create_and_process_image(keyword, i, caption_text)
-            alt_text = f"Ảnh minh họa {i} cho bài viết với từ khóa {keyword}"
-            url = upload_image_to_wordpress(filepath, slug, alt_text, caption_text)
-
+        for i, prompt_text in enumerate(image_prompts, 1):
+            filepath, slug = await create_and_process_image(prompt_text, keyword, i, image_captions[i-1])
+            alt_text = f"Ảnh minh họa phần {i} bài viết"
+            url = upload_image_to_wordpress(filepath, slug, alt_text, image_captions[i-1])
             image_urls.append(url)
             alts.append(alt_text)
-            captions.append(caption_text)
+            captions.append(image_captions[i-1])
 
         link = post_to_wordpress(keyword, article_data, image_urls, alts, captions)
         results.append([len(results) + 1, keyword, link])
         await context.bot.send_message(chat_id=context._chat_id, text=f"✅ Đăng thành công: {link}")
-
     except Exception as e:
         await context.bot.send_message(chat_id=context._chat_id, text=f"❌ Lỗi với từ khóa {keyword}: {str(e)}")
 
