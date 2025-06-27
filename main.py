@@ -17,6 +17,7 @@ from PIL import Image
 from io import BytesIO
 
 # --- Config ---
+# --- Config11 ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 WORDPRESS_URL = os.getenv("WORDPRESS_URL")
