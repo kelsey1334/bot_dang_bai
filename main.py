@@ -17,7 +17,6 @@ from PIL import Image
 from io import BytesIO
 
 # --- Config ---
-# --- Config11 ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 WORDPRESS_URL = os.getenv("WORDPRESS_URL")
@@ -119,7 +118,7 @@ async def create_and_process_image(keyword, index):
         model="dall-e-3",
         prompt=prompt,
         n=1,
-        size="1024x512"
+        size="1024x1024"  # Kích thước hợp lệ
     )
     img_url = response.data[0].url
 
@@ -157,7 +156,6 @@ def upload_image_to_wordpress(filepath, slug, alt, caption):
         }
     response = wp_client.call(UploadFile(data))
     attachment_url = response['url']
-    # Không lưu meta alt, caption riêng mà sẽ chèn trực tiếp khi chèn ảnh vào bài
     return attachment_url
 
 def insert_images_in_content(content, image_urls, alts, captions):
