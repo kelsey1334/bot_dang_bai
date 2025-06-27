@@ -12,7 +12,7 @@ import os
 import openpyxl
 import markdown2
 from wordpress_xmlrpc import Client, WordPressPost
-from wordpress_xmlrpc.methods.posts import NewPost
+from wordpress_xmlrpc.methods.posts import NewPost, GetPost, EditPost
 from wordpress_xmlrpc.methods.media import UploadFile
 from wordpress_xmlrpc.compat import xmlrpc_client
 from PIL import Image, ImageDraw, ImageFont
@@ -141,7 +141,7 @@ async def split_content_into_three_parts(content):
     return part1, part2, part3
 
 async def generate_caption(prompt_text, index):
-    caption_prompt = f"Viết caption ngắn gọn, súc tích dưới 100 ký tự cho ảnh minh họa phần {index} với nội dung sau: {prompt_text}"
+    caption_prompt = f"Viết caption ngắn gọn, súc tích dưới 50 ký tự cho ảnh minh họa phần {index} với nội dung sau: {prompt_text}"
     response = await openai_client.chat.completions.create(
         model="gpt-4.1-nano",
         messages=[{"role": "user", "content": caption_prompt}],
@@ -255,11 +255,16 @@ def insert_images_in_content(content, image_urls, alts, captions):
 
     return '\n'.join(parts)
 
+def remove_hr_after_post(post_id):
+    post = wp_client.call(GetPost(post_id))
+    content = post.content
+    # Xoá thẻ <hr /> và dòng trắng trước nó
+    content = re.sub(r'\n\s*\n?<hr\s*/?>', '', content, flags=re.IGNORECASE)
+    post.content = content
+    wp_client.call(EditPost(post_id, post))
+
 def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     content_with_images = insert_images_in_content(article_data["content"], image_urls, alts, captions)
-
-    # Xóa thẻ <hr /> cùng dòng trắng trước nó
-    content_with_images = re.sub(r'\n\s*\n?<hr\s*/?>', '', content_with_images, flags=re.IGNORECASE)
 
     html = markdown2.markdown(content_with_images)
     html = format_headings_and_keywords(html, keyword)
@@ -278,6 +283,10 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     ]
 
     post_id = wp_client.call(NewPost(post))
+
+    # Xoá hr sau khi đăng
+    remove_hr_after_post(post_id)
+
     return f"{WORDPRESS_URL}/{post.slug}/"
 
 async def process_keyword(keyword, context):
