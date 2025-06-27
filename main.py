@@ -178,7 +178,6 @@ def draw_caption_centered(draw, img_width, img_height, caption_text, font):
         x = (img_width - w) // 2
         y = y_start + i * line_height
 
-        # Viền đen đậm giả bold
         for dx in range(-2, 3):
             for dy in range(-2, 3):
                 if dx != 0 or dy != 0:
@@ -264,6 +263,7 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     post.title = article_data["post_title"]
     post.content = str(html)
     post.post_status = 'publish'
+    post.slug = to_slug(keyword)  # <-- Đặt slug URL theo keyword chính
 
     post.custom_fields = [
         {'key': 'rank_math_title', 'value': article_data["meta_title"]},
@@ -273,7 +273,7 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     ]
 
     post_id = wp_client.call(NewPost(post))
-    return f"{WORDPRESS_URL}/?p={post_id}"
+    return f"{WORDPRESS_URL}/{post.slug}/"  # URL dạng /slug/
 
 async def process_keyword(keyword, context):
     await context.bot.send_message(chat_id=context._chat_id, text=f"🔄 Đang xử lý từ khóa: {keyword}")
@@ -298,7 +298,7 @@ async def process_keyword(keyword, context):
 
         for i, prompt_text in enumerate(image_prompts, 1):
             filepath, slug = await create_and_process_image(prompt_text, keyword, i, image_captions[i-1])
-            alt_text = image_captions[i-1]  # alt = caption
+            alt_text = image_captions[i-1]
             url = upload_image_to_wordpress(filepath, slug, alt_text, image_captions[i-1])
             image_urls.append(url)
             alts.append(alt_text)
