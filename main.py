@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import re
+import unicodedata
 from telegram import Update, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from openai import AsyncOpenAI
@@ -13,7 +14,7 @@ from wordpress_xmlrpc import Client, WordPressPost
 from wordpress_xmlrpc.methods.posts import NewPost
 from wordpress_xmlrpc.methods.media import UploadFile
 from wordpress_xmlrpc.compat import xmlrpc_client
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 
 # --- Config ---
@@ -80,6 +81,12 @@ def format_headings_and_keywords(html, keyword):
     html = re.sub(re.escape(keyword), fr'<strong>{keyword}</strong>', html, flags=re.IGNORECASE)
     return html
 
+def slugify(text):
+    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
+    text = re.sub(r'[^a-zA-Z0-9\- ]', '', text).lower()
+    text = re.sub(r'\s+', '-', text)
+    return text.strip('-')
+
 async def generate_article(keyword):
     system_prompt = SEO_PROMPT.format(keyword=keyword)
     response = await openai_client.chat.completions.create(
@@ -112,13 +119,40 @@ async def generate_article(keyword):
         "content": content
     }
 
-async def create_and_process_image(keyword, index):
+def extract_captions_from_content(content, keyword):
+    paragraphs = [p.strip() for p in content.split('\n') if p.strip()]
+    n = len(paragraphs)
+    captions = []
+    for idx in [0, n//2, n-1]:
+        para = paragraphs[idx] if idx < n else ""
+        snippet = para[:100]
+        if keyword.lower() not in snippet.lower():
+            snippet = f"{keyword}: {snippet}"
+        captions.append(snippet)
+    return captions
+
+def draw_caption_on_image(image: Image.Image, caption: str):
+    draw = ImageDraw.Draw(image)
+    try:
+        font = ImageFont.truetype("arial.ttf", 20)
+    except:
+        font = ImageFont.load_default()
+
+    text = caption
+    margin = 10
+    text_width, text_height = draw.textsize(text, font=font)
+    x, y = margin, image.height - text_height - margin
+    draw.rectangle([(x - 5, y - 5), (x + text_width + 5, y + text_height + 5)], fill=(0, 0, 0, 160))
+    draw.text((x, y), text, fill=(255, 255, 255), font=font)
+    return image
+
+async def create_and_process_image(keyword, index, caption):
     prompt = f"Ảnh minh họa cho bài viết với từ khóa: {keyword}, phong cách phù hợp với nội dung SEO"
     response = await openai_client.images.generate(
         model="dall-e-3",
         prompt=prompt,
         n=1,
-        size="1024x1024"  # Kích thước hợp lệ
+        size="1024x1024"
     )
     img_url = response.data[0].url
 
@@ -128,6 +162,7 @@ async def create_and_process_image(keyword, index):
 
     img = Image.open(BytesIO(img_bytes)).convert('RGB')
     img = img.resize((800, 400))
+    img = draw_caption_on_image(img, caption)
 
     quality = 85
     buffer = BytesIO()
@@ -140,7 +175,7 @@ async def create_and_process_image(keyword, index):
             break
         quality -= 5
 
-    slug = f"anh-mo-ta-{keyword.replace(' ', '-').lower()}-{index}"
+    slug = f"anh-mo-ta-{slugify(keyword)}-{index}"
     filepath = f"/tmp/{slug}.jpg"
     with open(filepath, 'wb') as f:
         f.write(buffer.getvalue())
@@ -168,9 +203,9 @@ def insert_images_in_content(content, image_urls, alts, captions):
   <figcaption>{cap}</figcaption>
 </figure>'''
 
-    parts.insert(1, figure_template(image_urls[0], alts[0], captions[0]))  # Đầu bài
-    parts.insert(n//2, figure_template(image_urls[1], alts[1], captions[1]))  # Giữa bài
-    parts.insert(n-2, figure_template(image_urls[2], alts[2], captions[2]))  # Gần cuối bài
+    parts.insert(1, figure_template(image_urls[0], alts[0], captions[0]))
+    parts.insert(n//2, figure_template(image_urls[1], alts[1], captions[1]))
+    parts.insert(n-2, figure_template(image_urls[2], alts[2], captions[2]))
 
     return '\n'.join(parts)
 
@@ -183,6 +218,7 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     post.title = article_data["post_title"]
     post.content = str(html)
     post.post_status = 'publish'
+    post.slug = slugify(keyword)
 
     post.custom_fields = [
         {'key': 'rank_math_title', 'value': article_data["meta_title"]},
@@ -192,26 +228,21 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     ]
 
     post_id = wp_client.call(NewPost(post))
-    return f"{WORDPRESS_URL}/?p={post_id}"
+    return f"{WORDPRESS_URL}/{post.slug}/"
 
 async def process_keyword(keyword, context):
     await context.bot.send_message(chat_id=context._chat_id, text=f"🔄 Đang xử lý từ khóa: {keyword}")
     try:
         article_data = await generate_article(keyword)
-
-        # Tạo và upload 3 ảnh
+        captions = extract_captions_from_content(article_data["content"], keyword)
         image_urls = []
         alts = []
-        captions = []
-        for i in range(1, 4):
-            filepath, slug = await create_and_process_image(keyword, i)
-            alt_text = f"Ảnh minh họa {i} cho bài viết với từ khóa {keyword}"
-            caption_text = f"Caption ảnh {i} liên quan đến {keyword}"
-            url = upload_image_to_wordpress(filepath, slug, alt_text, caption_text)
+        for i, caption in enumerate(captions, start=1):
+            filepath, slug = await create_and_process_image(keyword, i, caption)
+            alt_text = caption
+            url = upload_image_to_wordpress(filepath, slug, alt_text, caption)
             image_urls.append(url)
             alts.append(alt_text)
-            captions.append(caption_text)
-
         link = post_to_wordpress(keyword, article_data, image_urls, alts, captions)
         results.append([len(results)+1, keyword, link])
         await context.bot.send_message(chat_id=context._chat_id, text=f"✅ Đăng thành công: {link}")
