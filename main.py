@@ -23,6 +23,8 @@ WORDPRESS_URL = os.getenv("WORDPRESS_URL")
 WORDPRESS_USER = os.getenv("WORDPRESS_USER")
 WORDPRESS_PASS = os.getenv("WORDPRESS_PASS")
 
+FONT_PATH = os.path.join(os.path.dirname(__file__), "NotoSans-Regular.ttf")
+
 SEO_PROMPT = '''Bạn là một chuyên gia viết nội dung SEO. Viết một bài blog dài khoảng 2500 từ chuẩn SEO với từ khóa chính là: "{keyword}".
 Yêu cầu cụ thể như sau:
 ---
@@ -181,8 +183,9 @@ async def create_and_process_image(prompt_text, keyword, index, caption_text):
 
     draw = ImageDraw.Draw(img)
     try:
-        font = ImageFont.truetype("arial.ttf", 18)
-    except:
+        font = ImageFont.truetype(FONT_PATH, 18)
+    except Exception as e:
+        logging.error(f"Load font lỗi: {e}, fallback font default")
         font = ImageFont.load_default()
 
     draw_caption_centered(draw, img.width, img.height, caption_text, font)
