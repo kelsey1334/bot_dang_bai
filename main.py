@@ -141,7 +141,7 @@ async def split_content_into_three_parts(content):
     return part1, part2, part3
 
 async def generate_caption(prompt_text, index):
-    caption_prompt = f"Viết caption ngắn gọn, súc tích dưới 50 ký tự cho ảnh minh họa phần {index} với nội dung sau: {prompt_text}"
+    caption_prompt = f"Viết caption ngắn gọn, súc tích dưới 100 ký tự cho ảnh minh họa phần {index} với nội dung sau: {prompt_text}"
     response = await openai_client.chat.completions.create(
         model="gpt-4.1-nano",
         messages=[{"role": "user", "content": caption_prompt}],
@@ -257,6 +257,10 @@ def insert_images_in_content(content, image_urls, alts, captions):
 
 def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     content_with_images = insert_images_in_content(article_data["content"], image_urls, alts, captions)
+
+    # Xóa thẻ <hr /> cùng dòng trắng trước nó
+    content_with_images = re.sub(r'\n\s*\n?<hr\s*/?>', '', content_with_images, flags=re.IGNORECASE)
+
     html = markdown2.markdown(content_with_images)
     html = format_headings_and_keywords(html, keyword)
 
@@ -264,7 +268,7 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     post.title = article_data["post_title"]
     post.content = str(html)
     post.post_status = 'publish'
-    post.slug = to_slug(keyword)  # <-- Đặt slug URL theo keyword chính
+    post.slug = to_slug(keyword)
 
     post.custom_fields = [
         {'key': 'rank_math_title', 'value': article_data["meta_title"]},
@@ -274,7 +278,7 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     ]
 
     post_id = wp_client.call(NewPost(post))
-    return f"{WORDPRESS_URL}/{post.slug}/"  # URL dạng /slug/
+    return f"{WORDPRESS_URL}/{post.slug}/"
 
 async def process_keyword(keyword, context):
     await context.bot.send_message(chat_id=context._chat_id, text=f"🔄 Đang xử lý từ khóa: {keyword}")
