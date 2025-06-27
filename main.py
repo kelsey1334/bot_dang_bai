@@ -1,6 +1,8 @@
 import logging
 import asyncio
 import re
+import unicodedata
+import string
 from telegram import Update, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from openai import AsyncOpenAI
@@ -79,6 +81,23 @@ def format_headings_and_keywords(html, keyword):
         html = re.sub(pattern, repl, html, flags=re.DOTALL)
     html = re.sub(re.escape(keyword), fr'<strong>{keyword}</strong>', html, flags=re.IGNORECASE)
     return html
+
+def to_slug(text):
+    text = unicodedata.normalize('NFKD', text)
+    text = text.encode('ascii', 'ignore').decode('ascii')
+    text = text.lower()
+    allowed = string.ascii_lowercase + string.digits + '-'
+    slug_chars = []
+    for c in text:
+        if c in allowed:
+            slug_chars.append(c)
+        elif c in (' ', '_'):
+            slug_chars.append('-')
+    slug_text = ''.join(slug_chars)
+    while '--' in slug_text:
+        slug_text = slug_text.replace('--', '-')
+    slug_text = slug_text.strip('-')
+    return slug_text[:50] or 'image'
 
 async def generate_article(keyword):
     system_prompt = SEO_PROMPT.format(keyword=keyword)
@@ -159,12 +178,11 @@ def draw_caption_centered(draw, img_width, img_height, caption_text, font):
         x = (img_width - w) // 2
         y = y_start + i * line_height
 
-        # Vẽ viền đen dày hơn để chữ rõ, tạo hiệu ứng bold giả
+        # Viền đen đậm giả bold
         for dx in range(-2, 3):
             for dy in range(-2, 3):
                 if dx != 0 or dy != 0:
                     draw.text((x + dx, y + dy), line, font=font, fill="black")
-        # Vẽ chữ trắng chính giữa
         draw.text((x, y), line, font=font, fill="white")
 
 async def create_and_process_image(prompt_text, keyword, index, caption_text):
@@ -185,7 +203,7 @@ async def create_and_process_image(prompt_text, keyword, index, caption_text):
 
     draw = ImageDraw.Draw(img)
     try:
-        font = ImageFont.truetype(FONT_PATH, 28)  # chữ to hơn
+        font = ImageFont.truetype(FONT_PATH, 28)
     except Exception as e:
         logging.error(f"Load font lỗi: {e}, fallback font default")
         font = ImageFont.load_default()
@@ -203,7 +221,7 @@ async def create_and_process_image(prompt_text, keyword, index, caption_text):
             break
         quality -= 5
 
-    slug = f"anh-mo-ta-{keyword.replace(' ', '-').lower()}-{index}"
+    slug = to_slug(caption_text)
     filepath = f"/tmp/{slug}.jpg"
     with open(filepath, 'wb') as f:
         f.write(buffer.getvalue())
@@ -280,7 +298,7 @@ async def process_keyword(keyword, context):
 
         for i, prompt_text in enumerate(image_prompts, 1):
             filepath, slug = await create_and_process_image(prompt_text, keyword, i, image_captions[i-1])
-            alt_text = image_captions[i-1]  # alt giống caption
+            alt_text = image_captions[i-1]  # alt = caption
             url = upload_image_to_wordpress(filepath, slug, alt_text, image_captions[i-1])
             image_urls.append(url)
             alts.append(alt_text)
