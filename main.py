@@ -145,7 +145,8 @@ def draw_caption_centered(draw, img_width, img_height, caption_text, font):
     if line:
         lines.append(line)
 
-    line_height = font.getsize("Ay")[1]
+    bbox = draw.textbbox((0, 0), "Ay", font=font)
+    line_height = bbox[3] - bbox[1]
     total_height = line_height * len(lines)
 
     y_start = img_height - total_height - 10
