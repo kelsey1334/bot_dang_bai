@@ -140,7 +140,7 @@ async def split_content_into_three_parts(content):
     return part1, part2, part3
 
 async def generate_caption(prompt_text, index):
-    caption_prompt = f"Viết caption ngắn gọn, súc tích cho ảnh minh họa phần {index} với nội dung sau: {prompt_text}"
+    caption_prompt = f"Viết caption ngắn gọn, súc tích dưới 50 ký tự cho ảnh minh họa phần {index} với nội dung sau: {prompt_text}"
     response = await openai_client.chat.completions.create(
         model="gpt-4.1-nano",
         messages=[{"role": "user", "content": caption_prompt}],
