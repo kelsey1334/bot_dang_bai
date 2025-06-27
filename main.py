@@ -127,6 +127,41 @@ async def generate_caption(prompt_text, index):
     )
     return response.choices[0].message.content.strip()
 
+def draw_caption_centered(draw, img_width, img_height, caption_text, font):
+    max_width = int(img_width * 0.7)
+
+    lines = []
+    words = caption_text.split()
+    line = ""
+    for word in words:
+        test_line = f"{line} {word}".strip()
+        bbox = draw.textbbox((0, 0), test_line, font=font)
+        w = bbox[2] - bbox[0]
+        if w <= max_width:
+            line = test_line
+        else:
+            lines.append(line)
+            line = word
+    if line:
+        lines.append(line)
+
+    line_height = font.getsize("Ay")[1]
+    total_height = line_height * len(lines)
+
+    y_start = img_height - total_height - 10
+
+    for i, line in enumerate(lines):
+        bbox = draw.textbbox((0, 0), line, font=font)
+        w = bbox[2] - bbox[0]
+        x = (img_width - w) // 2
+        y = y_start + i * line_height
+
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                if dx != 0 or dy != 0:
+                    draw.text((x + dx, y + dy), line, font=font, fill="black")
+        draw.text((x, y), line, font=font, fill="white")
+
 async def create_and_process_image(prompt_text, keyword, index, caption_text):
     response = await openai_client.images.generate(
         model="dall-e-3",
@@ -145,17 +180,11 @@ async def create_and_process_image(prompt_text, keyword, index, caption_text):
 
     draw = ImageDraw.Draw(img)
     try:
-        font = ImageFont.truetype("arial.ttf", 16)
+        font = ImageFont.truetype("arial.ttf", 18)
     except:
         font = ImageFont.load_default()
 
-    bbox = draw.textbbox((0, 0), caption_text, font=font)
-    text_width = bbox[2] - bbox[0]
-    text_height = bbox[3] - bbox[1]
-    x = 10
-    y = img.height - text_height - 10
-    draw.rectangle([x - 5, y - 5, x + text_width + 5, y + text_height + 5], fill=(0, 0, 0, 128))
-    draw.text((x, y), caption_text, font=font, fill=(255, 255, 255))
+    draw_caption_centered(draw, img.width, img.height, caption_text, font)
 
     quality = 85
     buffer = BytesIO()
@@ -196,9 +225,9 @@ def insert_images_in_content(content, image_urls, alts, captions):
   <figcaption>{cap}</figcaption>
 </figure>'''
 
-    parts.insert(1, figure_template(image_urls[0], alts[0], captions[0]))  # Đầu bài
-    parts.insert(n//2, figure_template(image_urls[1], alts[1], captions[1]))  # Giữa bài
-    parts.insert(n-2, figure_template(image_urls[2], alts[2], captions[2]))  # Gần cuối bài
+    parts.insert(1, figure_template(image_urls[0], alts[0], captions[0]))
+    parts.insert(n//2, figure_template(image_urls[1], alts[1], captions[1]))
+    parts.insert(n-2, figure_template(image_urls[2], alts[2], captions[2]))
 
     return '\n'.join(parts)
 
@@ -267,7 +296,6 @@ async def write_report_and_send(context):
     workbook.save(filepath)
     await context.bot.send_document(chat_id=context._chat_id, document=InputFile(filepath))
 
-# --- Handlers ---
 async def handle_txt_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     doc = update.message.document
     if not doc.file_name.endswith(".txt"):
@@ -295,7 +323,6 @@ async def handle_keyword(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await process_keyword(keyword, context)
     await write_report_and_send(context)
 
-# --- Main ---
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(MessageHandler(filters.Document.ALL, handle_txt_file))
 app.add_handler(CommandHandler("keyword", handle_keyword))
