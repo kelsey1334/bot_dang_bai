@@ -229,9 +229,9 @@ async def process_keyword(keyword, context):
         part1, part2, part3 = await split_content_into_three_parts(article_data["content"])
 
         image_prompts = [
-            f"Ảnh minh họa nội dung đầu bài viết: {part1[:200]}",
-            f"Ảnh minh họa nội dung giữa bài viết: {part2[:200]}",
-            f"Ảnh minh họa nội dung cuối bài viết: {part3[:200]}"
+            f"Ảnh minh họa nội dung đầu bài viết, phong cách đơn giản, tươi sáng không nhạy cảm và phản cảm: {part1[:200]}",
+            f"Ảnh minh họa nội dung giữa bài viết, phong cách đơn giản, tươi sáng không nhạy cảm và phản cảm: {part2[:200]}",
+            f"Ảnh minh họa nội dung cuối bài viết, phong cách đơn giản, tươi sáng không nhạy cảm và phản cảm: {part3[:200]}"
         ]
 
         image_captions = []
