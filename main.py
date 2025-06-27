@@ -159,10 +159,12 @@ def draw_caption_centered(draw, img_width, img_height, caption_text, font):
         x = (img_width - w) // 2
         y = y_start + i * line_height
 
-        for dx in [-1, 0, 1]:
-            for dy in [-1, 0, 1]:
+        # Vẽ viền đen dày hơn để chữ rõ, tạo hiệu ứng bold giả
+        for dx in range(-2, 3):
+            for dy in range(-2, 3):
                 if dx != 0 or dy != 0:
                     draw.text((x + dx, y + dy), line, font=font, fill="black")
+        # Vẽ chữ trắng chính giữa
         draw.text((x, y), line, font=font, fill="white")
 
 async def create_and_process_image(prompt_text, keyword, index, caption_text):
@@ -183,7 +185,7 @@ async def create_and_process_image(prompt_text, keyword, index, caption_text):
 
     draw = ImageDraw.Draw(img)
     try:
-        font = ImageFont.truetype(FONT_PATH, 18)
+        font = ImageFont.truetype(FONT_PATH, 28)  # chữ to hơn
     except Exception as e:
         logging.error(f"Load font lỗi: {e}, fallback font default")
         font = ImageFont.load_default()
