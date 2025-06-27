@@ -60,14 +60,14 @@ Yêu cầu cụ thể như sau:
 - Phải có một tiêu đề 2 là “Kết luận” chỉ để mỗi tiêu đề đề Kết luận không thêm bất cứ gì thêm. Trong đoạn dẫn của kết luận có chứa từ khoá chính. Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng và không được chèn CTA.
 ---
 5. Tối ưu từ khóa:
-- Mật độ từ khóa chính: 1% đến 1,5% cho một bài viết 1500 từ
-- Một đoạn không được chứa quá 1 keyword chính
+- Mật độ từ khóa chính: 0.8% đến 1,1% cho một bài viết 1500 từ
+- Một phân đoạn trong bài viết không được chứa quá 1 từ khoá chính
 - Phân bố đều ở sapo, H2, H3, thân bài, kết luận
 - Tự nhiên, không nhồi nhét
 - Thêm 3 ba từ khoá tự phụ ngữ nghĩa để bổ trợ
 - In đậm từ khóa chính.
 ---
-⚠️ Lưu ý: Viết bằng tiếng Việt, giọng văn rõ ràng, dễ hiểu, không lan man. Ưu tiên thông tin hữu ích, ví dụ thực tế, và có chiều sâu để tăng điểm chuyên môn với Google. Ngoài ra, các tiêu đề không được làm dạng bullet chỉ cần có định dạng tiêu đề là được rồi. Và bạn không được sử dụng thanh hàng ngang dạng horizontal rule để ngăn giữa các đoạn khi viết bài.Không cần phải có những thông tin lưu ý và câu hỏi mở rộng gì, thứ tôi cần chỉ là một bài content chuẩn seo'''
+⚠️ Lưu ý: Viết bằng tiếng Việt, giọng văn rõ ràng, dễ hiểu, không lan man. Ưu tiên thông tin hữu ích, ví dụ thực tế, và có chiều sâu để tăng điểm chuyên môn với Google. Ngoài ra, các tiêu đề không được làm dạng bullet chỉ cần có định dạng tiêu đề là được rồi. Không cần phải có những thông tin lưu ý và câu hỏi mở rộng gì, thứ tôi cần chỉ là một bài content chuẩn seo'''
 
 logging.basicConfig(level=logging.INFO)
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
