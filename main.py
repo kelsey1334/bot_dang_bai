@@ -27,7 +27,7 @@ WORDPRESS_PASS = os.getenv("WORDPRESS_PASS")
 
 FONT_PATH = os.path.join(os.path.dirname(__file__), "NotoSans-Regular.ttf")
 
-SEO_PROMPT = '''Bạn là một chuyên gia viết nội dung SEO. Viết một bài blog dài khoảng 3500 từ chuẩn SEO với từ khóa chính là: "{keyword}".
+SEO_PROMPT = '''Bạn là một chuyên gia viết nội dung SEO. Viết một bài blog dài khoảng 3500 từ chuẩn SEO và độ unique cao có sự khác biệt hơn với các bài viết trước đó với từ khóa chính là: "{keyword}".
 Yêu cầu cụ thể như sau:
 ---
 1. Tiêu đề SEO (Meta Title):
