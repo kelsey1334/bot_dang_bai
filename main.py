@@ -1,8 +1,8 @@
 import logging
 import asyncio
 import re
-import unicodedata
 import string
+from unidecode import unidecode
 from telegram import Update, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from openai import AsyncOpenAI
@@ -84,8 +84,8 @@ def format_headings_and_keywords(html, keyword):
     return html
 
 def to_slug(text):
-    text = unicodedata.normalize('NFKD', text)
-    text = text.encode('ascii', 'ignore').decode('ascii')
+    # Chuyển toàn bộ tiếng Việt sang ASCII chuẩn
+    text = unidecode(text)
     text = text.lower()
     allowed = string.ascii_lowercase + string.digits + '-'
     slug_chars = []
@@ -103,7 +103,7 @@ def to_slug(text):
 async def generate_article(keyword):
     system_prompt = SEO_PROMPT.format(keyword=keyword)
     response = await openai_client.chat.completions.create(
-        model="gpt-4.1-nano",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Từ khóa chính: {keyword}"}
@@ -143,7 +143,7 @@ async def split_content_into_three_parts(content):
 async def generate_caption(prompt_text, index):
     caption_prompt = f"Viết caption ngắn gọn, súc tích dưới 120 ký tự cho ảnh minh họa phần {index} với nội dung sau: {prompt_text}"
     response = await openai_client.chat.completions.create(
-        model="gpt-4.1-nano",
+        model="gpt-4o",
         messages=[{"role": "user", "content": caption_prompt}],
         temperature=0.7
     )
