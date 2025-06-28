@@ -75,6 +75,7 @@ keywords_queue = asyncio.Queue()
 results = []
 
 def format_headings_and_keywords(html, keyword):
+    # In đậm từ khóa trong các tiêu đề và nội dung
     for tag in ['h1', 'h2', 'h3', 'h4']:
         pattern = fr'<{tag}>(.*?)</{tag}>'
         repl = fr'<{tag}><strong>\1</strong></{tag}>'
@@ -83,20 +84,12 @@ def format_headings_and_keywords(html, keyword):
     return html
 
 def to_slug(text):
+    # Chuyển tiếng Việt sang ASCII chuẩn
     text = unidecode(text)
     text = text.lower()
     allowed = string.ascii_lowercase + string.digits + '-'
-    slug_chars = []
-    for c in text:
-        if c in allowed:
-            slug_chars.append(c)
-        elif c in (' ', '_'):
-            slug_chars.append('-')
-    slug_text = ''.join(slug_chars)
-    while '--' in slug_text:
-        slug_text = slug_text.replace('--', '-')
-    slug_text = slug_text.strip('-')
-    return slug_text[:50] or 'image'
+    slug_chars = [c if c in allowed else '-' for c in text]
+    return ''.join(slug_chars).strip('-')[:50] or 'image'
 
 async def generate_article(keyword):
     system_prompt = SEO_PROMPT.format(keyword=keyword)
@@ -111,76 +104,25 @@ async def generate_article(keyword):
     raw = response.choices[0].message.content.replace('—', '<hr>')
     raw = re.sub(r'(?i)^\s*Sapo:\s*\n?', '', raw, flags=re.MULTILINE)
 
-    meta_title_match = re.search(r"(?i)^1\..*?Meta Title.*?:\s*(.*)", raw, re.MULTILINE)
-    meta_description_match = re.search(r"(?i)^2\..*?Meta Description.*?:\s*(.*)", raw, re.MULTILINE)
-    h1_match = re.search(r'#\s*(.*?)\n', raw)
-
-    meta_title = meta_title_match.group(1).strip() if meta_title_match else keyword
-    meta_description = meta_description_match.group(1).strip() if meta_description_match else ""
-    h1_title = h1_match.group(1).strip() if h1_match else keyword
-
-    content_start = h1_match.end() if h1_match else 0
-    content = raw[content_start:].strip()
+    meta_title = re.search(r"(?i)^1\..*?Meta Title.*?:\s*(.*)", raw, re.MULTILINE)
+    meta_description = re.search(r"(?i)^2\..*?Meta Description.*?:\s*(.*)", raw, re.MULTILINE)
+    h1_title = re.search(r'#\s*(.*?)\n', raw)
 
     return {
-        "post_title": h1_title,
-        "meta_title": meta_title,
-        "meta_description": meta_description,
-        "focus_keyword": keyword,
-        "content": content
+        "post_title": h1_title.group(1).strip() if h1_title else keyword,
+        "meta_title": meta_title.group(1).strip() if meta_title else keyword,
+        "meta_description": meta_description.group(1).strip() if meta_description else "",
+        "content": raw[content_start:].strip()
     }
 
-async def split_content_into_three_parts(content):
-    lines = content.split('\n')
-    n = len(lines)
-    part1 = '\n'.join(lines[: n//3])
-    part2 = '\n'.join(lines[n//3: 2*n//3])
-    part3 = '\n'.join(lines[2*n//3 :])
-    return part1, part2, part3
-
 async def generate_caption(prompt_text, index):
-    caption_prompt = f"Viết caption ngắn gọn, súc tích dưới 120 ký tự cho ảnh minh họa phần {index} với nội dung sau: {prompt_text}"
+    caption_prompt = f"Viết caption ngắn gọn, súc tích dưới 120 ký tự cho ảnh minh họa phần {index}: {prompt_text}"
     response = await openai_client.chat.completions.create(
         model="gpt-4.1-nano",
         messages=[{"role": "user", "content": caption_prompt}],
         temperature=0.7
     )
     return response.choices[0].message.content.strip()
-
-def draw_caption_centered(draw, img_width, img_height, caption_text, font):
-    max_width = int(img_width * 0.9)
-    lines = []
-    words = caption_text.split()
-    line = ""
-    for word in words:
-        test_line = f"{line} {word}".strip()
-        bbox = draw.textbbox((0, 0), test_line, font=font)
-        w = bbox[2] - bbox[0]
-        if w <= max_width:
-            line = test_line
-        else:
-            lines.append(line)
-            line = word
-    if line:
-        lines.append(line)
-
-    bbox = draw.textbbox((0, 0), "Ay", font=font)
-    line_height = bbox[3] - bbox[1]
-    total_height = line_height * len(lines)
-
-    y_start = img_height - total_height - 10
-
-    for i, line in enumerate(lines):
-        bbox = draw.textbbox((0, 0), line, font=font)
-        w = bbox[2] - bbox[0]
-        x = (img_width - w) // 2
-        y = y_start + i * line_height
-
-        for dx in range(-2, 3):
-            for dy in range(-2, 3):
-                if dx != 0 or dy != 0:
-                    draw.text((x + dx, y + dy), line, font=font, fill="black")
-        draw.text((x, y), line, font=font, fill="white")
 
 async def create_and_process_image(prompt_text, keyword, index, caption_text):
     response = await openai_client.images.generate(
@@ -190,7 +132,6 @@ async def create_and_process_image(prompt_text, keyword, index, caption_text):
         size="1024x1024"
     )
     img_url = response.data[0].url
-
     async with aiohttp.ClientSession() as session:
         async with session.get(img_url) as resp:
             img_bytes = await resp.read()
@@ -202,22 +143,14 @@ async def create_and_process_image(prompt_text, keyword, index, caption_text):
     try:
         font = ImageFont.truetype(FONT_PATH, 28)
     except Exception as e:
-        logging.error(f"Load font lỗi: {e}, fallback font default")
+        logging.error(f"Load font lỗi: {e}")
         font = ImageFont.load_default()
 
     draw_caption_centered(draw, img.width, img.height, caption_text, font)
 
-    quality = 85
     buffer = BytesIO()
-    while True:
-        buffer.seek(0)
-        buffer.truncate()
-        img.save(buffer, format='JPEG', quality=quality)
-        size_kb = buffer.tell() / 1024
-        if size_kb <= 100 or quality <= 30:
-            break
-        quality -= 5
-
+    img.save(buffer, format='JPEG', quality=85)
+    buffer.seek(0)
     slug = to_slug(caption_text)
     filepath = f"/tmp/{slug}.jpg"
     with open(filepath, 'wb') as f:
@@ -225,7 +158,7 @@ async def create_and_process_image(prompt_text, keyword, index, caption_text):
 
     return filepath, slug
 
-def upload_image_to_wordpress(filepath, slug, alt, caption):
+async def upload_image_to_wordpress(filepath, slug, caption):
     with open(filepath, 'rb') as img_file:
         data = {
             'name': f"{slug}.jpg",
@@ -233,85 +166,17 @@ def upload_image_to_wordpress(filepath, slug, alt, caption):
             'bits': xmlrpc_client.Binary(img_file.read()),
         }
     response = wp_client.call(UploadFile(data))
-    attachment_url = response['url']
-    return attachment_url
+    return response['url']
 
-def upload_image_to_wordpress_for_thumbnail(image_url):
-    """Upload ảnh và lấy ID ảnh để set làm ảnh đại diện"""
-    response = wp_client.call(UploadFile({'name': 'thumbnail.jpg', 'type': 'image/jpeg', 'bits': xmlrpc_client.Binary(image_url)}))
-    image_id = response['id']  # Lấy ID ảnh từ phản hồi
-    return image_id
-
-def insert_images_in_content(content, image_urls, alts, captions):
+def insert_images_in_content(content, image_urls, captions):
     parts = content.split('\n')
-    n = len(parts)
-
-    figure_template = lambda url, alt, cap: f'''
-<figure>
-  <img src="{url}" alt="{alt}" width="800" height="400"/>
-  <figcaption>{cap}</figcaption>
-</figure>'''
-
-    parts.insert(1, figure_template(image_urls[0], alts[0], captions[0]))
-    parts.insert(n//2, figure_template(image_urls[1], alts[1], captions[1]))
-    parts.insert(n-2, figure_template(image_urls[2], alts[2], captions[2]))
+    figure_template = lambda url, cap: f'<figure><img src="{url}" alt="{cap}" width="800" height="400"/><figcaption>{cap}</figcaption></figure>'
+    
+    parts.insert(1, figure_template(image_urls[0], captions[0]))
+    parts.insert(len(parts)//2, figure_template(image_urls[1], captions[1]))
+    parts.insert(len(parts)-2, figure_template(image_urls[2], captions[2]))
 
     return '\n'.join(parts)
-
-def remove_hr_after_post(post_id):
-    post = wp_client.call(GetPost(post_id))
-    content = post.content
-    content = re.sub(r'\n*\s*<hr\s*/?>\s*\n*', '\n', content, flags=re.IGNORECASE)
-    post.content = content
-    wp_client.call(EditPost(post_id, post))
-
-class SetPostThumbnail:
-    def __init__(self, post_id, thumbnail_id):
-        self.post_id = post_id
-        self.thumbnail_id = thumbnail_id
-    
-    def __str__(self):
-        return f"""
-        <methodCall>
-            <methodName>wp.setPostThumbnail</methodName>
-            <params>
-                <param><value>{self.post_id}</value></param>
-                <param><value>{self.thumbnail_id}</value></param>
-            </params>
-        </methodCall>
-        """
-
-def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
-    content_with_images = insert_images_in_content(article_data["content"], image_urls, alts, captions)
-
-    html = markdown2.markdown(content_with_images)
-    html = format_headings_and_keywords(html, keyword)
-
-    post = WordPressPost()
-    post.title = article_data["post_title"]
-    post.content = str(html)
-    post.post_status = 'publish'
-    post.slug = to_slug(keyword)
-
-    post.custom_fields = [
-        {'key': 'rank_math_title', 'value': article_data["meta_title"]},
-        {'key': 'rank_math_description', 'value': article_data["meta_description"]},
-        {'key': 'rank_math_focus_keyword', 'value': article_data["focus_keyword"]},
-        {'key': 'rank_math_keywords', 'value': article_data["focus_keyword"]}
-    ]
-
-    post_id = wp_client.call(NewPost(post))
-
-    # Cập nhật ảnh đại diện cho bài viết
-    if image_urls:  # Kiểm tra nếu có ảnh
-        first_image_url = image_urls[0]  # Chọn ảnh đầu tiên làm ảnh đại diện
-        image_id = upload_image_to_wordpress_for_thumbnail(first_image_url)
-        wp_client.call(SetPostThumbnail(post_id, image_id))  # Gọi phương thức custom SetPostThumbnail
-
-    # Xoá hr sau khi đăng bài
-    remove_hr_after_post(post_id)
-
-    return f"{WORDPRESS_URL}/{post.slug}/"
 
 async def process_keyword(keyword, context):
     await context.bot.send_message(chat_id=context._chat_id, text=f"🔄 Đang xử lý từ khóa: {keyword}")
@@ -320,43 +185,31 @@ async def process_keyword(keyword, context):
         part1, part2, part3 = await split_content_into_three_parts(article_data["content"])
 
         image_prompts = [
-            f"Ảnh minh họa nội dung đầu bài viết, phong cách đơn giản, tươi sáng không nhạy cảm và phản cảm: {part1[:200]}",
-            f"Ảnh minh họa nội dung giữa bài viết, phong cách đơn giản, tươi sáng không nhạy cảm và phản cảm: {part2[:200]}",
-            f"Ảnh minh họa nội dung cuối bài viết, phong cách đơn giản, tươi sáng không nhạy cảm và phản cảm: {part3[:200]}"
+            f"Ảnh minh họa đầu bài: {part1[:200]}",
+            f"Ảnh minh họa giữa bài: {part2[:200]}",
+            f"Ảnh minh họa cuối bài: {part3[:200]}"
         ]
 
-        image_captions = []
-        for i, prompt_text in enumerate(image_prompts, 1):
-            caption = await generate_caption(prompt_text, i)
-            image_captions.append(caption)
+        image_captions = [await generate_caption(prompt, i) for i, prompt in enumerate(image_prompts, 1)]
+        image_urls = [await upload_image_to_wordpress(await create_and_process_image(prompt, keyword, i, caption)[0], to_slug(caption), caption) for i, (prompt, caption) in enumerate(zip(image_prompts, image_captions), 1)]
+        
+        content_with_images = insert_images_in_content(article_data["content"], image_urls, image_captions)
 
-        image_urls = []
-        alts = []
-        captions = []
-
-        for i, prompt_text in enumerate(image_prompts, 1):
-            filepath, slug = await create_and_process_image(prompt_text, keyword, i, image_captions[i-1])
-            alt_text = image_captions[i-1]
-            url = upload_image_to_wordpress(filepath, slug, alt_text, image_captions[i-1])
-            image_urls.append(url)
-            alts.append(alt_text)
-            captions.append(image_captions[i-1])
-
-        link = post_to_wordpress(keyword, article_data, image_urls, alts, captions)
-        results.append([len(results) + 1, keyword, link])
-        await context.bot.send_message(chat_id=context._chat_id, text=f"✅ Đăng thành công: {link}")
+        post = WordPressPost()
+        post.title = article_data["post_title"]
+        post.content = markdown2.markdown(content_with_images)
+        post.slug = to_slug(keyword)
+        post.post_status = 'publish'
+        post.custom_fields = [
+            {'key': 'rank_math_title', 'value': article_data["meta_title"]},
+            {'key': 'rank_math_description', 'value': article_data["meta_description"]},
+            {'key': 'rank_math_focus_keyword', 'value': keyword}
+        ]
+        
+        post_id = wp_client.call(NewPost(post))
+        await context.bot.send_message(chat_id=context._chat_id, text=f"✅ Đăng thành công: {WORDPRESS_URL}/{post.slug}/")
     except Exception as e:
         await context.bot.send_message(chat_id=context._chat_id, text=f"❌ Lỗi với từ khóa {keyword}: {str(e)}")
-
-async def write_report_and_send(context):
-    workbook = openpyxl.Workbook()
-    sheet = workbook.active
-    sheet.append(["STT", "Keyword", "Link đăng bài"])
-    for row in results:
-        sheet.append(row)
-    filepath = "/tmp/report.xlsx"
-    workbook.save(filepath)
-    await context.bot.send_document(chat_id=context._chat_id, document=InputFile(filepath))
 
 async def handle_txt_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     doc = update.message.document
@@ -366,29 +219,19 @@ async def handle_txt_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file = await context.bot.get_file(doc.file_id)
     path = f"/tmp/{doc.file_name}"
     await file.download_to_drive(path)
-    async with aiofiles.open(path, mode='r') as f:
-        async for line in f:
-            keyword = line.strip()
-            if keyword:
-                await keywords_queue.put(keyword)
-    await update.message.reply_text("📥 Đã nhận file. Bắt đầu xử lý...")
-    while not keywords_queue.empty():
-        keyword = await keywords_queue.get()
-        await process_keyword(keyword, context)
-    await write_report_and_send(context)
 
-async def handle_keyword(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("❌ Vui lòng nhập từ khóa. Ví dụ: /keyword marketing online")
-        return
-    keyword = ' '.join(context.args)
-    await process_keyword(keyword, context)
+    async with aiofiles.open(path, mode='r') as f:
+        keywords = [line.strip() for line in await f.readlines() if line.strip()]
+        for keyword in keywords:
+            await keywords_queue.put(keyword)
+    
+    await update.message.reply_text("📥 Đã nhận file. Bắt đầu xử lý...")
+
+    await asyncio.gather(*(process_keyword(keyword, context) for keyword in keywords))
     await write_report_and_send(context)
 
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(MessageHandler(filters.Document.ALL, handle_txt_file))
-app.add_handler(CommandHandler("keyword", handle_keyword))
 
 if __name__ == '__main__':
-    print("Bot is running...")
     app.run_polling()
