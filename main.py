@@ -1,7 +1,7 @@
 import logging
 import asyncio
 import re
-import unicodedata
+import unicodedat
 import string
 from telegram import Update, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
@@ -64,7 +64,6 @@ Yêu cầu cụ thể như sau:
 - Một phân đoạn trong bài viết không được chứa quá 1 từ khoá chính
 - Phân bố đều ở sapo, H2, H3, thân bài, kết luận
 - Tự nhiên, không nhồi nhét
-- Thêm 3 ba từ khoá tự phụ ngữ nghĩa để bổ trợ
 - In đậm từ khóa chính.
 ---
 ⚠️ Lưu ý: Viết bằng tiếng Việt, giọng văn rõ ràng, dễ hiểu, không lan man. Ưu tiên thông tin hữu ích, ví dụ thực tế, và có chiều sâu để tăng điểm chuyên môn với Google. Ngoài ra, các tiêu đề không được làm dạng bullet chỉ cần có định dạng tiêu đề là được rồi. Không cần phải có những thông tin lưu ý và câu hỏi mở rộng gì, thứ tôi cần chỉ là một bài content chuẩn seo'''
@@ -108,7 +107,7 @@ async def generate_article(keyword):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Từ khóa chính: {keyword}"}
         ],
-        temperature=0.7
+        temperature=1.0
     )
     raw = response.choices[0].message.content.replace('—', '<hr>')
     raw = re.sub(r'(?i)^\s*Sapo:\s*\n?', '', raw, flags=re.MULTILINE)
@@ -145,12 +144,12 @@ async def generate_caption(prompt_text, index):
     response = await openai_client.chat.completions.create(
         model="gpt-4.1-nano",
         messages=[{"role": "user", "content": caption_prompt}],
-        temperature=0.7
+        temperature=1.0
     )
     return response.choices[0].message.content.strip()
 
 def draw_caption_centered(draw, img_width, img_height, caption_text, font):
-    max_width = int(img_width * 0.7)
+    max_width = int(img_width * 0.9)
 
     lines = []
     words = caption_text.split()
