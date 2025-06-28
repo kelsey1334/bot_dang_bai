@@ -12,7 +12,7 @@ import os
 import openpyxl
 import markdown2
 from wordpress_xmlrpc import Client, WordPressPost
-from wordpress_xmlrpc.methods.posts import NewPost, GetPost, EditPost, SetPostThumbnail
+from wordpress_xmlrpc.methods.posts import NewPost, GetPost, EditPost
 from wordpress_xmlrpc.methods.media import UploadFile
 from wordpress_xmlrpc.compat import xmlrpc_client
 from PIL import Image, ImageDraw, ImageFont
@@ -265,6 +265,22 @@ def remove_hr_after_post(post_id):
     post.content = content
     wp_client.call(EditPost(post_id, post))
 
+class SetPostThumbnail:
+    def __init__(self, post_id, thumbnail_id):
+        self.post_id = post_id
+        self.thumbnail_id = thumbnail_id
+    
+    def __str__(self):
+        return f"""
+        <methodCall>
+            <methodName>wp.setPostThumbnail</methodName>
+            <params>
+                <param><value>{self.post_id}</value></param>
+                <param><value>{self.thumbnail_id}</value></param>
+            </params>
+        </methodCall>
+        """
+
 def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     content_with_images = insert_images_in_content(article_data["content"], image_urls, alts, captions)
 
@@ -290,7 +306,7 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     if image_urls:  # Kiểm tra nếu có ảnh
         first_image_url = image_urls[0]  # Chọn ảnh đầu tiên làm ảnh đại diện
         image_id = upload_image_to_wordpress_for_thumbnail(first_image_url)
-        wp_client.call(SetPostThumbnail(post_id, image_id))
+        wp_client.call(SetPostThumbnail(post_id, image_id))  # Gọi phương thức custom SetPostThumbnail
 
     # Xoá hr sau khi đăng bài
     remove_hr_after_post(post_id)
