@@ -57,7 +57,7 @@ Yêu cầu cụ thể như sau:
 - H3 cũng nên chứa từ khóa chính hoặc biến thể của từ khóa
 - Nếu phù hợp, có thể sử dụng thẻ H4 để phân tích chuyên sâu hơn
 - Mỗi tiêu đề H2/H3 cần có một đoạn dẫn ngắn gợi mở nội dung
-- Phải có một tiêu đề 2 là “Kết luận” chỉ để mỗi tiêu đề đề Kết luận không thêm bất cứ gì thêm. Trong đoạn dẫn của kết luận có chứa từ khoá chính. Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng và không được chèn CTA.
+- Phải có một tiêu đề 2 là "Kết luận" chỉ để mỗi tiêu đề đề Kết luận không thêm bất cứ gì thêm. Trong đoạn dẫn của kết luận có chứa từ khoá chính. Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng và không được chèn CTA.
 ---
 5. Tối ưu từ khóa:
 - Mật độ từ khóa chính: 1% đến 1,5% cho một bài viết 1500 từ
@@ -228,6 +228,7 @@ async def create_and_process_image(prompt_text, keyword, index, caption_text):
     return filepath, slug
 
 def upload_image_to_wordpress(filepath, slug, alt, caption):
+    """Upload ảnh lên WordPress và trả về URL + attachment ID"""
     with open(filepath, 'rb') as img_file:
         data = {
             'name': f"{slug}.jpg",
@@ -236,7 +237,8 @@ def upload_image_to_wordpress(filepath, slug, alt, caption):
         }
     response = wp_client.call(UploadFile(data))
     attachment_url = response['url']
-    return attachment_url
+    attachment_id = response['id']  # Lấy attachment ID để set featured image
+    return attachment_url, attachment_id
 
 def insert_images_in_content(content, image_urls, alts, captions):
     parts = content.split('\n')
@@ -262,7 +264,45 @@ def remove_hr_after_post(post_id):
     post.content = content
     wp_client.call(EditPost(post_id, post))
 
-def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
+def set_featured_image(post_id, attachment_id):
+    """Set ảnh đại diện cho bài viết"""
+    try:
+        # Sử dụng custom field để set featured image
+        post = wp_client.call(GetPost(post_id))
+        
+        # Thêm custom field _thumbnail_id
+        if not hasattr(post, 'custom_fields') or post.custom_fields is None:
+            post.custom_fields = []
+        
+        # Tìm và cập nhật hoặc thêm mới _thumbnail_id
+        thumbnail_field_exists = False
+        for field in post.custom_fields:
+            if field['key'] == '_thumbnail_id':
+                field['value'] = str(attachment_id)
+                thumbnail_field_exists = True
+                break
+        
+        if not thumbnail_field_exists:
+            post.custom_fields.append({
+                'key': '_thumbnail_id',
+                'value': str(attachment_id)
+            })
+        
+        # Update post với custom field mới
+        wp_client.call(EditPost(post_id, post))
+        logging.info(f"✅ Đã set ảnh đại diện (ID: {attachment_id}) cho bài viết ID: {post_id}")
+        
+    except Exception as e:
+        logging.error(f"❌ Lỗi khi set featured image: {str(e)}")
+
+def post_to_wordpress(keyword, article_data, image_data_list):
+    """
+    image_data_list: danh sách chứa (url, attachment_id, alt, caption) cho mỗi ảnh
+    """
+    image_urls = [data[0] for data in image_data_list]
+    alts = [data[2] for data in image_data_list]
+    captions = [data[3] for data in image_data_list]
+    
     content_with_images = insert_images_in_content(article_data["content"], image_urls, alts, captions)
 
     html = markdown2.markdown(content_with_images)
@@ -282,6 +322,10 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     ]
 
     post_id = wp_client.call(NewPost(post))
+
+    # Set ảnh đầu tiên làm featured image
+    first_image_attachment_id = image_data_list[0][1]
+    set_featured_image(post_id, first_image_attachment_id)
 
     # Xoá hr sau khi đăng bài
     remove_hr_after_post(post_id)
@@ -305,21 +349,26 @@ async def process_keyword(keyword, context):
             caption = await generate_caption(prompt_text, i)
             image_captions.append(caption)
 
-        image_urls = []
-        alts = []
-        captions = []
+        image_data_list = []  # Lưu (url, attachment_id, alt, caption)
 
         for i, prompt_text in enumerate(image_prompts, 1):
             filepath, slug = await create_and_process_image(prompt_text, keyword, i, image_captions[i-1])
             alt_text = image_captions[i-1]
-            url = upload_image_to_wordpress(filepath, slug, alt_text, image_captions[i-1])
-            image_urls.append(url)
-            alts.append(alt_text)
-            captions.append(image_captions[i-1])
+            url, attachment_id = upload_image_to_wordpress(filepath, slug, alt_text, image_captions[i-1])
+            image_data_list.append((url, attachment_id, alt_text, image_captions[i-1]))
+            
+            # Thông báo progress
+            await context.bot.send_message(
+                chat_id=context._chat_id, 
+                text=f"📸 Đã tạo và upload ảnh {i}/3"
+            )
 
-        link = post_to_wordpress(keyword, article_data, image_urls, alts, captions)
+        link = post_to_wordpress(keyword, article_data, image_data_list)
         results.append([len(results) + 1, keyword, link])
-        await context.bot.send_message(chat_id=context._chat_id, text=f"✅ Đăng thành công: {link}")
+        await context.bot.send_message(
+            chat_id=context._chat_id, 
+            text=f"✅ Đăng thành công: {link}\n🖼️ Ảnh đại diện: Ảnh đầu tiên đã được set làm featured image"
+        )
     except Exception as e:
         await context.bot.send_message(chat_id=context._chat_id, text=f"❌ Lỗi với từ khóa {keyword}: {str(e)}")
 
