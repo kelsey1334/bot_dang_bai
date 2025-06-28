@@ -237,8 +237,7 @@ def upload_image_to_wordpress(filepath, slug, alt, caption):
         }
     response = wp_client.call(UploadFile(data))
     attachment_url = response['url']
-    attachment_id = response['id']  # Lấy ID ảnh để làm thumbnail
-    return attachment_url, attachment_id
+    return attachment_url
 
 def insert_images_in_content(content, image_urls, alts, captions):
     parts = content.split('\n')
@@ -264,7 +263,7 @@ def remove_hr_after_post(post_id):
     post.content = content
     wp_client.call(EditPost(post_id, post))
 
-def post_to_wordpress(keyword, article_data, image_urls, alts, captions, thumbnail_id=None):
+def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     content_with_images = insert_images_in_content(article_data["content"], image_urls, alts, captions)
 
     html = markdown2.markdown(content_with_images)
@@ -275,9 +274,6 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions, thumbna
     post.content = str(html)
     post.post_status = 'publish'
     post.slug = to_slug(keyword)
-
-    if thumbnail_id:
-        post.thumbnail = thumbnail_id  # Gán ảnh đại diện
 
     post.custom_fields = [
         {'key': 'rank_math_title', 'value': article_data["meta_title"]},
@@ -313,18 +309,16 @@ async def process_keyword(keyword, context):
         image_urls = []
         alts = []
         captions = []
-        attachment_ids = []
 
         for i, prompt_text in enumerate(image_prompts, 1):
             filepath, slug = await create_and_process_image(prompt_text, keyword, i, image_captions[i-1])
             alt_text = image_captions[i-1]
-            url, attachment_id = upload_image_to_wordpress(filepath, slug, alt_text, image_captions[i-1])
+            url = upload_image_to_wordpress(filepath, slug, alt_text, image_captions[i-1])
             image_urls.append(url)
             alts.append(alt_text)
             captions.append(image_captions[i-1])
-            attachment_ids.append(attachment_id)
 
-        link = post_to_wordpress(keyword, article_data, image_urls, alts, captions, thumbnail_id=attachment_ids[0])
+        link = post_to_wordpress(keyword, article_data, image_urls, alts, captions)
         results.append([len(results) + 1, keyword, link])
         await context.bot.send_message(chat_id=context._chat_id, text=f"✅ Đăng thành công: {link}")
     except Exception as e:
