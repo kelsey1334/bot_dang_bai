@@ -1,7 +1,7 @@
 import logging
 import asyncio
 import re
-import unicodedat
+import unicodedata
 import string
 from telegram import Update, InputFile
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
@@ -64,6 +64,7 @@ Yêu cầu cụ thể như sau:
 - Một phân đoạn trong bài viết không được chứa quá 1 từ khoá chính
 - Phân bố đều ở sapo, H2, H3, thân bài, kết luận
 - Tự nhiên, không nhồi nhét
+- Thêm 3 ba từ khoá tự phụ ngữ nghĩa để bổ trợ
 - In đậm từ khóa chính.
 ---
 ⚠️ Lưu ý: Viết bằng tiếng Việt, giọng văn rõ ràng, dễ hiểu, không lan man. Ưu tiên thông tin hữu ích, ví dụ thực tế, và có chiều sâu để tăng điểm chuyên môn với Google. Ngoài ra, các tiêu đề không được làm dạng bullet chỉ cần có định dạng tiêu đề là được rồi. Không cần phải có những thông tin lưu ý và câu hỏi mở rộng gì, thứ tôi cần chỉ là một bài content chuẩn seo'''
