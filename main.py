@@ -57,7 +57,7 @@ Yêu cầu cụ thể như sau:
 - H3 cũng nên chứa từ khóa chính hoặc biến thể của từ khóa
 - Nếu phù hợp, có thể sử dụng thẻ H4 để phân tích chuyên sâu hơn
 - Mỗi tiêu đề H2/H3 cần có một đoạn dẫn ngắn gợi mở nội dung
-- Phải có một tiêu đề 2 là “Kết luận” chỉ để mỗi tiêu đề đề Kết luận không thêm bất cứ gì thêm. Trong đoạn dẫn của kết luận có chứa từ khoá chính. Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng và không được chèn CTA.
+- Đoạn cuối cùng của bài phải chứa từ khoá chính. Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng và không được chèn CTA.
 ---
 5. Tối ưu từ khóa:
 - Mật độ từ khóa chính: 1% đến 1,5% cho một bài viết 1500 từ
@@ -66,7 +66,7 @@ Yêu cầu cụ thể như sau:
 - Thêm 3 ba từ khoá tự phụ ngữ nghĩa để bổ trợ
 - In đậm từ khóa chính.
 ---
-⚠️ Lưu ý: Viết bằng tiếng Việt, giọng văn rõ ràng, dễ hiểu, không lan man. Ưu tiên thông tin hữu ích, ví dụ thực tế, và có chiều sâu để tăng điểm chuyên môn với Google. Ngoài ra, các tiêu đề không được làm dạng bullet chỉ cần có định dạng tiêu đề là được rồi. Không cần phải có những thông tin lưu ý và câu hỏi mở rộng gì, thứ tôi cần chỉ là một bài content chuẩn seo'''
+⚠️ Lưu ý: Viết bằng tiếng Việt, giọng văn rõ ràng, dễ hiểu, không lan man. Ưu tiên thông tin hữu ích, ví dụ thực tế, và có chiều sâu để tăng điểm chuyên môn với Google. Ngoài ra, các tiêu đề không được làm dạng bullet chỉ cần có định dạng tiêu đề là được rồi. Không cần phải có những thông tin lưu ý và câu hỏi mở rộng gì, thứ tôi cần chỉ là một bài content chuẩn seo, còn thêm một lưu ý nữa là bạn không cần phải khoe là bạn làm gì với bài viết này vào cuối câu trả lời khi viết xong bài viết này thứ tôi cần chỉ là bài viết'''
 
 logging.basicConfig(level=logging.INFO)
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
