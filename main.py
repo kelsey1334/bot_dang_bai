@@ -12,7 +12,7 @@ import os
 import openpyxl
 import markdown2
 from wordpress_xmlrpc import Client, WordPressPost
-from wordpress_xmlrpc.methods.posts import NewPost, GetPost, EditPost
+from wordpress_xmlrpc.methods.posts import NewPost, GetPost, EditPost, SetPostThumbnail
 from wordpress_xmlrpc.methods.media import UploadFile
 from wordpress_xmlrpc.compat import xmlrpc_client
 from PIL import Image, ImageDraw, ImageFont
@@ -83,7 +83,6 @@ def format_headings_and_keywords(html, keyword):
     return html
 
 def to_slug(text):
-    # Chuyển tiếng Việt sang ASCII chuẩn
     text = unidecode(text)
     text = text.lower()
     allowed = string.ascii_lowercase + string.digits + '-'
@@ -150,7 +149,6 @@ async def generate_caption(prompt_text, index):
 
 def draw_caption_centered(draw, img_width, img_height, caption_text, font):
     max_width = int(img_width * 0.9)
-
     lines = []
     words = caption_text.split()
     line = ""
@@ -238,6 +236,12 @@ def upload_image_to_wordpress(filepath, slug, alt, caption):
     attachment_url = response['url']
     return attachment_url
 
+def upload_image_to_wordpress_for_thumbnail(image_url):
+    """Upload ảnh và lấy ID ảnh để set làm ảnh đại diện"""
+    response = wp_client.call(UploadFile({'name': 'thumbnail.jpg', 'type': 'image/jpeg', 'bits': xmlrpc_client.Binary(image_url)}))
+    image_id = response['id']  # Lấy ID ảnh từ phản hồi
+    return image_id
+
 def insert_images_in_content(content, image_urls, alts, captions):
     parts = content.split('\n')
     n = len(parts)
@@ -257,7 +261,6 @@ def insert_images_in_content(content, image_urls, alts, captions):
 def remove_hr_after_post(post_id):
     post = wp_client.call(GetPost(post_id))
     content = post.content
-    # Xoá thẻ <hr /> và các dòng trắng xung quanh nó sau khi đăng
     content = re.sub(r'\n*\s*<hr\s*/?>\s*\n*', '\n', content, flags=re.IGNORECASE)
     post.content = content
     wp_client.call(EditPost(post_id, post))
@@ -282,6 +285,12 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     ]
 
     post_id = wp_client.call(NewPost(post))
+
+    # Cập nhật ảnh đại diện cho bài viết
+    if image_urls:  # Kiểm tra nếu có ảnh
+        first_image_url = image_urls[0]  # Chọn ảnh đầu tiên làm ảnh đại diện
+        image_id = upload_image_to_wordpress_for_thumbnail(first_image_url)
+        wp_client.call(SetPostThumbnail(post_id, image_id))
 
     # Xoá hr sau khi đăng bài
     remove_hr_after_post(post_id)
