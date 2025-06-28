@@ -27,7 +27,7 @@ WORDPRESS_PASS = os.getenv("WORDPRESS_PASS")
 
 FONT_PATH = os.path.join(os.path.dirname(__file__), "NotoSans-Regular.ttf")
 
-SEO_PROMPT = '''Bạn là một chuyên gia viết nội dung SEO. Viết một bài blog dài khoảng 2500 từ chuẩn SEO với từ khóa chính là: "{keyword}".
+SEO_PROMPT = '''Bạn là một chuyên gia viết nội dung SEO. Viết một bài blog dài khoảng 3500 từ chuẩn SEO với từ khóa chính là: "{keyword}".
 Yêu cầu cụ thể như sau:
 ---
 1. Tiêu đề SEO (Meta Title):
@@ -56,7 +56,7 @@ Yêu cầu cụ thể như sau:
 - Mỗi tiêu đề H2 gồm 2 đến 3 tiêu đề H3 bổ trợ
 - H3 cũng nên chứa từ khóa chính hoặc biến thể của từ khóa
 - Nếu phù hợp, có thể sử dụng thẻ H4 để phân tích chuyên sâu hơn
-- Sau mỗi tiêu đề H2 phải có một đoạn dẫn ngắn gợi mở nội dung
+- Mỗi tiêu đề H2/H3 cần có một đoạn dẫn ngắn gợi mở nội dung
 - Phải có một tiêu đề 2 là “Kết luận” chỉ để mỗi tiêu đề đề Kết luận không thêm bất cứ gì thêm. Trong đoạn dẫn của kết luận có chứa từ khoá chính. Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng và không được chèn CTA.
 ---
 5. Tối ưu từ khóa:
