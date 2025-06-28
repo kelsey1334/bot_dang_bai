@@ -8,3 +8,4 @@ markdown2==2.4.12
 aiohttp>=3.9.0
 urllib3>=2.0.0
 pillow
+unidecode
