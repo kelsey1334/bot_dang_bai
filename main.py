@@ -61,7 +61,6 @@ Yêu cầu cụ thể như sau:
 ---
 5. Tối ưu từ khóa:
 - Mật độ từ khóa chính: 1% đến 1,5% cho một bài viết 1500 từ
-- Một phân đoạn trong bài viết không được chứa quá 1 từ khoá chính
 - Phân bố đều ở sapo, H2, H3, thân bài, kết luận
 - Tự nhiên, không nhồi nhét
 - Thêm 3 ba từ khoá tự phụ ngữ nghĩa để bổ trợ
