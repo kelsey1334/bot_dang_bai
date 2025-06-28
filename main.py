@@ -257,7 +257,6 @@ def insert_images_in_content(content, image_urls, alts, captions):
 def remove_hr_after_post(post_id):
     post = wp_client.call(GetPost(post_id))
     content = post.content
-    # Xoá thẻ <hr /> và các dòng trắng xung quanh nó sau khi đăng
     content = re.sub(r'\n*\s*<hr\s*/?>\s*\n*', '\n', content, flags=re.IGNORECASE)
     post.content = content
     wp_client.call(EditPost(post_id, post))
@@ -272,7 +271,10 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     post.title = article_data["post_title"]
     post.content = str(html)
     post.post_status = 'publish'
-    post.slug = to_slug(keyword)
+
+    # Chắc chắn slug chỉ có từ khóa mà không chứa xmlrpc.php
+    post_slug = to_slug(keyword)
+    post.slug = post_slug
 
     post.custom_fields = [
         {'key': 'rank_math_title', 'value': article_data["meta_title"]},
@@ -286,20 +288,27 @@ def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     # Xoá hr sau khi đăng bài
     remove_hr_after_post(post_id)
 
-    return f"{WORDPRESS_URL}/{post.slug}/"
+    # Trả về link dạng https://69vnhot.uk.com/mo-thay-gap-ba-ngoai/
+    return f"{WORDPRESS_URL}/{post_slug}/"
 
 async def process_keyword(keyword, context):
     await context.bot.send_message(chat_id=context._chat_id, text=f"🔄 Đang xử lý từ khóa: {keyword}")
     try:
+        # Bước 1: Sinh bài viết
+        await context.bot.send_message(chat_id=context._chat_id, text="📝 Đang tạo bài viết SEO...")
         article_data = await generate_article(keyword)
+        
+        # Bước 2: Chia bài viết thành 3 phần
+        await context.bot.send_message(chat_id=context._chat_id, text="✂️ Đang chia bài viết thành 3 phần...")
         part1, part2, part3 = await split_content_into_three_parts(article_data["content"])
 
+        # Bước 3: Tạo hình ảnh minh họa
+        await context.bot.send_message(chat_id=context._chat_id, text="🖼️ Đang tạo hình ảnh minh họa cho bài viết...")
         image_prompts = [
             f"Ảnh minh họa nội dung đầu bài viết, phong cách đơn giản, tươi sáng không nhạy cảm và phản cảm: {part1[:200]}",
             f"Ảnh minh họa nội dung giữa bài viết, phong cách đơn giản, tươi sáng không nhạy cảm và phản cảm: {part2[:200]}",
             f"Ảnh minh họa nội dung cuối bài viết, phong cách đơn giản, tươi sáng không nhạy cảm và phản cảm: {part3[:200]}"
         ]
-
         image_captions = []
         for i, prompt_text in enumerate(image_prompts, 1):
             caption = await generate_caption(prompt_text, i)
@@ -309,6 +318,8 @@ async def process_keyword(keyword, context):
         alts = []
         captions = []
 
+        # Bước 4: Tải lên hình ảnh lên WordPress
+        await context.bot.send_message(chat_id=context._chat_id, text="⬆️ Đang tải lên hình ảnh minh họa...")
         for i, prompt_text in enumerate(image_prompts, 1):
             filepath, slug = await create_and_process_image(prompt_text, keyword, i, image_captions[i-1])
             alt_text = image_captions[i-1]
@@ -317,7 +328,11 @@ async def process_keyword(keyword, context):
             alts.append(alt_text)
             captions.append(image_captions[i-1])
 
-        link = post_to_wordpress(keyword, article_data, image_urls, alts, captions)
+        # Bước 5: Đăng bài lên WordPress và thử lại nếu có lỗi
+        await context.bot.send_message(chat_id=context._chat_id, text="📤 Đang đăng bài lên WordPress...")
+        link = await try_post_to_wordpress(keyword, article_data, image_urls, alts, captions, 2)
+
+        # Bước 6: Gửi thông báo thành công
         results.append([len(results) + 1, keyword, link])
         await context.bot.send_message(chat_id=context._chat_id, text=f"✅ Đăng thành công: {link}")
     except Exception as e:
