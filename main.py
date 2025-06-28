@@ -56,11 +56,11 @@ Yêu cầu cụ thể như sau:
 - Mỗi tiêu đề H2 gồm 2 đến 3 tiêu đề H3 bổ trợ
 - H3 cũng nên chứa từ khóa chính hoặc biến thể của từ khóa
 - Nếu phù hợp, có thể sử dụng thẻ H4 để phân tích chuyên sâu hơn
-- Mỗi tiêu đề H2/H3 cần có một đoạn dẫn ngắn gợi mở nội dung
+- Mỗi tiêu đề H2/H3 phải có một đoạn dẫn ngắn gợi mở nội dung
 - Phải có một tiêu đề 2 là “Kết luận” chỉ để mỗi tiêu đề đề Kết luận không thêm bất cứ gì thêm. Trong đoạn dẫn của kết luận có chứa từ khoá chính. Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng và không được chèn CTA.
 ---
 5. Tối ưu từ khóa:
-- Mật độ từ khóa chính: 0.8% đến 1,1% cho một bài viết 1500 từ
+- Mật độ từ khóa chính: 1% đến 1,5% cho một bài viết 1500 từ
 - Một phân đoạn trong bài viết không được chứa quá 1 từ khoá chính
 - Phân bố đều ở sapo, H2, H3, thân bài, kết luận
 - Tự nhiên, không nhồi nhét
@@ -108,7 +108,7 @@ async def generate_article(keyword):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Từ khóa chính: {keyword}"}
         ],
-        temperature=1.0
+        temperature=0.7
     )
     raw = response.choices[0].message.content.replace('—', '<hr>')
     raw = re.sub(r'(?i)^\s*Sapo:\s*\n?', '', raw, flags=re.MULTILINE)
@@ -141,11 +141,11 @@ async def split_content_into_three_parts(content):
     return part1, part2, part3
 
 async def generate_caption(prompt_text, index):
-    caption_prompt = f"Viết caption ngắn gọn, súc tích dưới 50 ký tự cho ảnh minh họa phần {index} với nội dung sau: {prompt_text}"
+    caption_prompt = f"Viết caption ngắn gọn, súc tích dưới 120 ký tự cho ảnh minh họa phần {index} với nội dung sau: {prompt_text}"
     response = await openai_client.chat.completions.create(
         model="gpt-4.1-nano",
         messages=[{"role": "user", "content": caption_prompt}],
-        temperature=1.0
+        temperature=0.7
     )
     return response.choices[0].message.content.strip()
 
