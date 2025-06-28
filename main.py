@@ -3,8 +3,8 @@ import asyncio
 import re
 import string
 from unidecode import unidecode
-from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+from telegram import Update, InputFile
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from openai import AsyncOpenAI
 import aiohttp
 import aiofiles
@@ -57,7 +57,7 @@ Yêu cầu cụ thể như sau:
 - H3 cũng nên chứa từ khóa chính hoặc biến thể của từ khóa
 - Nếu phù hợp, có thể sử dụng thẻ H4 để phân tích chuyên sâu hơn
 - Mỗi tiêu đề H2/H3 cần có một đoạn dẫn ngắn gợi mở nội dung
-- Phải có một tiêu đề 2 là "Kết luận" chỉ để mỗi tiêu đề đề Kết luận không thêm bất cứ gì thêm. Trong đoạn dẫn của kết luận có chứa từ khoá chính. Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng và không được chèn CTA.
+- Phải có một tiêu đề 2 là “Kết luận” chỉ để mỗi tiêu đề đề Kết luận không thêm bất cứ gì thêm. Trong đoạn dẫn của kết luận có chứa từ khoá chính. Tóm tắt lại nội dung bài và nhấn mạnh thông điệp cuối cùng và không được chèn CTA.
 ---
 5. Tối ưu từ khóa:
 - Mật độ từ khóa chính: 1% đến 1,5% cho một bài viết 1500 từ
@@ -73,8 +73,6 @@ openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 wp_client = Client(WORDPRESS_URL, WORDPRESS_USER, WORDPRESS_PASS)
 keywords_queue = asyncio.Queue()
 results = []
-# Lưu trữ tạm thời data để chờ user chọn featured image
-temp_data = {}
 
 def format_headings_and_keywords(html, keyword):
     for tag in ['h1', 'h2', 'h3', 'h4']:
@@ -230,7 +228,6 @@ async def create_and_process_image(prompt_text, keyword, index, caption_text):
     return filepath, slug
 
 def upload_image_to_wordpress(filepath, slug, alt, caption):
-    """Upload ảnh lên WordPress và trả về URL + attachment ID"""
     with open(filepath, 'rb') as img_file:
         data = {
             'name': f"{slug}.jpg",
@@ -239,8 +236,7 @@ def upload_image_to_wordpress(filepath, slug, alt, caption):
         }
     response = wp_client.call(UploadFile(data))
     attachment_url = response['url']
-    attachment_id = response['id']  # Lấy attachment ID để set featured image
-    return attachment_url, attachment_id
+    return attachment_url
 
 def insert_images_in_content(content, image_urls, alts, captions):
     parts = content.split('\n')
@@ -266,137 +262,7 @@ def remove_hr_after_post(post_id):
     post.content = content
     wp_client.call(EditPost(post_id, post))
 
-def set_featured_image(post_id, attachment_id):
-    """Set ảnh đại diện cho bài viết"""
-    try:
-        # Sử dụng custom field để set featured image
-        post = wp_client.call(GetPost(post_id))
-        
-        # Thêm custom field _thumbnail_id
-        if not hasattr(post, 'custom_fields') or post.custom_fields is None:
-            post.custom_fields = []
-        
-        # Tìm và cập nhật hoặc thêm mới _thumbnail_id
-        thumbnail_field_exists = False
-        for field in post.custom_fields:
-            if field['key'] == '_thumbnail_id':
-                field['value'] = str(attachment_id)
-                thumbnail_field_exists = True
-                break
-        
-        if not thumbnail_field_exists:
-            post.custom_fields.append({
-                'key': '_thumbnail_id',
-                'value': str(attachment_id)
-            })
-        
-        # Update post với custom field mới
-        wp_client.call(EditPost(post_id, post))
-        logging.info(f"✅ Đã set ảnh đại diện (ID: {attachment_id}) cho bài viết ID: {post_id}")
-        
-    except Exception as e:
-        logging.error(f"❌ Lỗi khi set featured image: {str(e)}")
-
-async def show_image_selection(context, chat_id, keyword, article_data, image_data_list):
-    """Hiển thị 3 ảnh và cho user chọn ảnh đại diện"""
-    
-    # Lưu data tạm thời
-    temp_key = f"{chat_id}_{keyword}"
-    temp_data[temp_key] = {
-        'keyword': keyword,
-        'article_data': article_data,
-        'image_data_list': image_data_list,
-        'chat_id': chat_id
-    }
-    
-    # Tạo inline keyboard với 3 nút chọn ảnh
-    keyboard = [
-        [InlineKeyboardButton(f"🖼️ Chọn ảnh 1", callback_data=f"select_image_{temp_key}_0")],
-        [InlineKeyboardButton(f"🖼️ Chọn ảnh 2", callback_data=f"select_image_{temp_key}_1")],
-        [InlineKeyboardButton(f"🖼️ Chọn ảnh 3", callback_data=f"select_image_{temp_key}_2")],
-        [InlineKeyboardButton(f"🚀 Đăng bài không ảnh đại diện", callback_data=f"select_image_{temp_key}_none")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    # Gửi 3 ảnh cho user xem
-    message = f"📸 **Chọn ảnh đại diện cho bài viết: {keyword}**\n\n"
-    await context.bot.send_message(chat_id=chat_id, text=message)
-    
-    for i, (url, attachment_id, alt, caption) in enumerate(image_data_list, 1):
-        await context.bot.send_photo(
-            chat_id=chat_id,
-            photo=url,
-            caption=f"**Ảnh {i}:** {caption}"
-        )
-    
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text="👆 Chọn ảnh nào làm ảnh đại diện cho bài viết:",
-        reply_markup=reply_markup
-    )
-
-async def handle_image_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Xử lý khi user chọn ảnh đại diện"""
-    query = update.callback_query
-    await query.answer()
-    
-    callback_data = query.data
-    if not callback_data.startswith("select_image_"):
-        return
-    
-    # Parse callback data: select_image_{chat_id}_{keyword}_{image_index}
-    parts = callback_data.split("_")
-    if len(parts) < 4:
-        await query.edit_message_text("❌ Lỗi dữ liệu callback")
-        return
-    
-    temp_key = "_".join(parts[2:-1])  # chat_id_keyword
-    selected_index = parts[-1]  # image index hoặc "none"
-    
-    if temp_key not in temp_data:
-        await query.edit_message_text("❌ Dữ liệu đã hết hạn. Vui lòng thử lại.")
-        return
-    
-    data = temp_data[temp_key]
-    keyword = data['keyword']
-    article_data = data['article_data']
-    image_data_list = data['image_data_list']
-    chat_id = data['chat_id']
-    
-    try:
-        await query.edit_message_text(f"⏳ Đang đăng bài viết: {keyword}...")
-        
-        if selected_index == "none":
-            # Đăng bài không ảnh đại diện
-            link = post_to_wordpress(keyword, article_data, image_data_list, featured_image_index=None)
-            message = f"✅ Đăng thành công: {link}\n🖼️ Không có ảnh đại diện"
-        else:
-            # Đăng bài với ảnh đại diện được chọn
-            selected_idx = int(selected_index)
-            link = post_to_wordpress(keyword, article_data, image_data_list, featured_image_index=selected_idx)
-            selected_caption = image_data_list[selected_idx][3]
-            message = f"✅ Đăng thành công: {link}\n🖼️ Ảnh đại diện: {selected_caption}"
-        
-        results.append([len(results) + 1, keyword, link])
-        await context.bot.send_message(chat_id=chat_id, text=message)
-        
-        # Xóa data tạm thời
-        del temp_data[temp_key]
-        
-    except Exception as e:
-        await context.bot.send_message(
-            chat_id=chat_id, 
-            text=f"❌ Lỗi khi đăng bài {keyword}: {str(e)}"
-        )
-        if temp_key in temp_data:
-            del temp_data[temp_key]
-    """
-    image_data_list: danh sách chứa (url, attachment_id, alt, caption) cho mỗi ảnh
-    """
-    image_urls = [data[0] for data in image_data_list]
-    alts = [data[2] for data in image_data_list]
-    captions = [data[3] for data in image_data_list]
-    
+def post_to_wordpress(keyword, article_data, image_urls, alts, captions):
     content_with_images = insert_images_in_content(article_data["content"], image_urls, alts, captions)
 
     html = markdown2.markdown(content_with_images)
@@ -416,10 +282,6 @@ async def handle_image_selection(update: Update, context: ContextTypes.DEFAULT_T
     ]
 
     post_id = wp_client.call(NewPost(post))
-
-    # Set ảnh đầu tiên làm featured image
-    first_image_attachment_id = image_data_list[0][1]
-    set_featured_image(post_id, first_image_attachment_id)
 
     # Xoá hr sau khi đăng bài
     remove_hr_after_post(post_id)
@@ -443,23 +305,21 @@ async def process_keyword(keyword, context):
             caption = await generate_caption(prompt_text, i)
             image_captions.append(caption)
 
-        image_data_list = []  # Lưu (url, attachment_id, alt, caption)
+        image_urls = []
+        alts = []
+        captions = []
 
         for i, prompt_text in enumerate(image_prompts, 1):
             filepath, slug = await create_and_process_image(prompt_text, keyword, i, image_captions[i-1])
             alt_text = image_captions[i-1]
-            url, attachment_id = upload_image_to_wordpress(filepath, slug, alt_text, image_captions[i-1])
-            image_data_list.append((url, attachment_id, alt_text, image_captions[i-1]))
-            
-            # Thông báo progress
-            await context.bot.send_message(
-                chat_id=context._chat_id, 
-                text=f"📸 Đã tạo và upload ảnh {i}/3"
-            )
+            url = upload_image_to_wordpress(filepath, slug, alt_text, image_captions[i-1])
+            image_urls.append(url)
+            alts.append(alt_text)
+            captions.append(image_captions[i-1])
 
-        # Hiển thị ảnh để user chọn ảnh đại diện
-        await show_image_selection(context, context._chat_id, keyword, article_data, image_data_list)
-        
+        link = post_to_wordpress(keyword, article_data, image_urls, alts, captions)
+        results.append([len(results) + 1, keyword, link])
+        await context.bot.send_message(chat_id=context._chat_id, text=f"✅ Đăng thành công: {link}")
     except Exception as e:
         await context.bot.send_message(chat_id=context._chat_id, text=f"❌ Lỗi với từ khóa {keyword}: {str(e)}")
 
@@ -487,33 +347,10 @@ async def handle_txt_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if keyword:
                 await keywords_queue.put(keyword)
     await update.message.reply_text("📥 Đã nhận file. Bắt đầu xử lý...")
-    
-    # Xử lý từng keyword một
     while not keywords_queue.empty():
         keyword = await keywords_queue.get()
         await process_keyword(keyword, context)
-        
-    # Chờ user chọn hết ảnh rồi mới gửi report
-    await update.message.reply_text("⏳ Đang chờ bạn chọn ảnh đại diện cho các bài viết...")
-
-async def send_final_report(context, chat_id):
-    """Gửi report cuối cùng sau khi tất cả bài viết đã được đăng"""
-    if results:
-        await write_report_and_send_to_chat(context, chat_id)
-        await context.bot.send_message(
-            chat_id=chat_id, 
-            text=f"🎉 Hoàn thành! Đã đăng {len(results)} bài viết."
-        )
-
-async def write_report_and_send_to_chat(context, chat_id):
-    workbook = openpyxl.Workbook()
-    sheet = workbook.active
-    sheet.append(["STT", "Keyword", "Link đăng bài"])
-    for row in results:
-        sheet.append(row)
-    filepath = "/tmp/report.xlsx"
-    workbook.save(filepath)
-    await context.bot.send_document(chat_id=chat_id, document=InputFile(filepath))
+    await write_report_and_send(context)
 
 async def handle_keyword(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -521,11 +358,11 @@ async def handle_keyword(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     keyword = ' '.join(context.args)
     await process_keyword(keyword, context)
+    await write_report_and_send(context)
 
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(MessageHandler(filters.Document.ALL, handle_txt_file))
 app.add_handler(CommandHandler("keyword", handle_keyword))
-app.add_handler(CallbackQueryHandler(handle_image_selection))  # Thêm handler cho callback
 
 if __name__ == '__main__':
     print("Bot is running...")
